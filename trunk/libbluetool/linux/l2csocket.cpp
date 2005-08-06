@@ -2,6 +2,7 @@
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/l2cap.h>
+#include <bluetooth/sdp.h>
 
 L2CapSocket::L2CapSocket()
 :	Socket( PF_BLUETOOTH, SOCK_SEQPACKET, BTPROTO_L2CAP )

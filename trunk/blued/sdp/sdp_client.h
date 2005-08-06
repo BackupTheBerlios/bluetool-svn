@@ -19,7 +19,7 @@ public:
 	*/
 	void SearchServices( const DBus::CallMessage& );
 
-	void SearchAttributes( const DBus::Callmessage& );
+	void SearchAttributes( const DBus::CallMessage& );
 
 	void SearchServAttrs( const DBus::CallMessage& );
 };

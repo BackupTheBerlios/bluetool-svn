@@ -1,9 +1,10 @@
 #ifndef __SOCKET_H
 #define __SOCKET_H
 
-#include  <sys/types.h>
-#include  <sys/socket.h>
-#include  <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#include <fnctl.h>
 
 class Socket
 {
@@ -48,6 +49,17 @@ public:
 	int setsockopt( int level, int optname, const char* optval, int optlen )
 	{
 		return ::setsockopt(_fd, level, optname, optval, optlen);
+	}
+
+	int flags()
+	{
+		return fnctl(_fd, F_GETFL, 0);
+	}
+
+	int set_blocking( bool block )
+	{
+		int fl = block ? flags() | O_NONBLOCK : flags() & ~O_NONBLOCK;
+		return fnctl(_fd, F_SETFL, fl);
 	}
 
 protected:

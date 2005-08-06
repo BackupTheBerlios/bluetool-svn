@@ -24,7 +24,13 @@ HciTracker::HciTracker( /*HciDevicePTable& devices*/ )
 		{
 			blue_dbg("AARRGH! Hal doesn't want to give us the interface name!");
 		}
-		_devices[iface] = new HciDevice( iface );
+		try
+		{
+			_devices[iface] = new HciDevice( iface );
+		}catch( std::exception& e )
+		{
+			blue_dbg("error connecting to device %s: %s", iface, e.what());
+		}
 	
 		delete *hi; // :(
 		++hi;

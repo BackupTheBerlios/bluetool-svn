@@ -4,8 +4,11 @@
 #include "../common/types.h"
 #include "../common/fdnotifier.h"
 #include "../common/timeout.h"
+#include "../common/bytevector.h"
 
+#include "bdaddr.h"
 #include "l2csocket.h"
+#include "sdperror.h"
 
 namespace Sdp
 {
@@ -18,6 +21,8 @@ namespace Sdp
 class Session
 {
 public:
+
+	Session( BdAddr& src, BdAddr& dest );
 
 	void start_service_search(  );
 

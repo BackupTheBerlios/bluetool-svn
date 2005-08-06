@@ -2,6 +2,9 @@
 #define __SDP_ERROR_H
 
 #include <exception>
+#include <cstring>
+
+#include "../common/types.h"
 
 namespace Sdp
 {
@@ -9,7 +12,13 @@ namespace Sdp
 class Error : public std::exception
 {
 public:
+	Error();
+
+	Error( u16 code );
+
 	virtual const char* what() const throw();
+private:
+	u16 _code;
 };
 
 }//namespace Sdp

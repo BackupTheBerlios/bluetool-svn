@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "../common/eventloop.h"
-#include "hci_manager.h"
+#include "hci/hci_manager.h"
 
 int main()
 {

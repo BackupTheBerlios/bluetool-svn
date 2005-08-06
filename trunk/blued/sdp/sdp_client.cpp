@@ -9,3 +9,16 @@ SdpClient::SdpClient()
 	register_method( SdpClient, SearchAttributes );
 	register_method( SdpClient, SearchServAttrs );
 }
+
+
+void SdpClient::SearchServices( const DBus::CallMessage& )
+{
+}
+
+void SdpClient::SearchAttributes( const DBus::CallMessage& )
+{
+}
+
+void SdpClient::SearchServAttrs( const DBus::CallMessage& )
+{
+}
