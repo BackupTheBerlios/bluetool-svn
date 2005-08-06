@@ -9,7 +9,7 @@
 
 namespace Sdp
 {
-	class DataElement;
+	class DataElement;	
 	typedef std::list<DataElement> DataElementList;
 
 	class Bool;
@@ -18,7 +18,7 @@ namespace Sdp
 
 	class Attribute;
 
-	class Record;
+	class Record;	//there's no AttributeList, since we've records :)
 }
 
 /*
@@ -27,10 +27,14 @@ namespace Sdp
 namespace Sdp
 {
 
-class DataElement : public RefCnt
+class DataElement
 {
 public:
-	DataElement( u8* raw );
+	DataElement();
+	DataElement( const DataElement& );
+	~DataElement();
+
+	const DataElement& operator = ( const DataElement& );
 
 	operator Bool&();
 	operator String&();
@@ -49,6 +53,8 @@ public:
 	Bool( bool );
 
 	bool to_bool();
+
+	void operator = ( bool b );
 };
 
 class String : public DataElement
@@ -57,18 +63,26 @@ public:
 	String( const char* );
 
 	std::string to_string();
-}
+
+	void operator = ( std::string& s );
+};
 
 class UUID : public DataElement
 {
 public:
+	UUID( u16 );
+
 	UUID( u32 );
 
-	UUID( u16 );
+	UUID( u128 );
 
 	std::string to_string();
 
-	bool operator == ( const UUID );
+	bool operator == ( const UUID& );
+
+	void operator = ( u16 u );
+	void operator = ( u32 u );
+	void operator = ( u128 u );
 };
 
 class Attribute : public DataElement
@@ -81,21 +95,23 @@ public:
 	DataElement& elem();
 };
 
-class Record : public RefCnt
+class Record
 {
 public:
-	Record( u8* raw );
+	Record();
 
-	Attribute* operator[]( u16 attr_id );
+	Record( const Record& );
+
+	~Record();
+
+	Attribute operator[]( u16 attr_id );
 
 	u32 handle();
 
 	void add( Attribute& );
 
 	void remove( u16 attr_id );
-
-	Attribute& operator []( u16 attr_id );
-
+/*
 	languages();
 
 	profile_descriptions();
@@ -113,7 +129,7 @@ public:
 	U32& service_ttl();
 
 	U32& database_state();
-
+*/
 	void add_service_id( UUID& );
 
 	void add_group_id( UUID& );

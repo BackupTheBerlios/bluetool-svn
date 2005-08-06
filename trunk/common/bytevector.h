@@ -4,8 +4,6 @@
 #include "types.h"
 #include <vector>
 
-class ByteVector : public std::vector<u8>
-{
-};
+typedef std::vector<u8> ByteVector;
 
 #endif//__BYTE_VECTOR_H

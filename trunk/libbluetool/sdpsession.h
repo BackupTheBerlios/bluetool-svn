@@ -9,6 +9,7 @@
 #include "bdaddr.h"
 #include "l2csocket.h"
 #include "sdperror.h"
+#include "sdprecord.h"
 
 namespace Sdp
 {
@@ -24,11 +25,11 @@ public:
 
 	Session( BdAddr& src, BdAddr& dest );
 
-	void start_service_search(  );
+	void start_service_search( DataElementList& service_pattern );
 
-	void start_attribute_search(  );
+	void start_attribute_search( u32 service_handle, DataElementList& attributes );
 
-	void start_attr_serv_search(  );
+	void start_attr_serv_search( DataElementList& service_pattern, DataElementList& attributes );
 
 private:
 

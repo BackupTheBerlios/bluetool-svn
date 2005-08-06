@@ -4,7 +4,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <fnctl.h>
+#include <fcntl.h>
 
 class Socket
 {
@@ -53,13 +53,13 @@ public:
 
 	int flags()
 	{
-		return fnctl(_fd, F_GETFL, 0);
+		return ::fcntl(_fd, F_GETFL, 0);
 	}
 
 	int set_blocking( bool block )
 	{
 		int fl = block ? flags() | O_NONBLOCK : flags() & ~O_NONBLOCK;
-		return fnctl(_fd, F_SETFL, fl);
+		return ::fcntl(_fd, F_SETFL, fl);
 	}
 
 protected:

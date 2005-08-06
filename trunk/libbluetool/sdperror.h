@@ -16,9 +16,12 @@ public:
 
 	Error( u16 code );
 
+	Error( const char* what );
+
 	virtual const char* what() const throw();
 private:
 	u16 _code;
+	const char* _what;
 };
 
 }//namespace Sdp

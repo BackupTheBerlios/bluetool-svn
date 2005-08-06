@@ -1,6 +1,8 @@
 #include <vector>
 
 #include <sys/poll.h>
+#include <sys/errno.h>
+#include <netinet/in.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/sdp.h>
@@ -28,7 +30,7 @@ struct Session::Private
 
 	/* write buffer
 	*/
-	int obytes;
+	uint obytes;
 	ByteVector obuf;
 	sdp_pdu_hdr_t* req;
 
@@ -41,7 +43,7 @@ struct Session::Private
 	{
 		IDLE,
 		INIT,
-		CONNNECTED,
+		CONNECTED,
 		WAITING,
 		DISCONNECTED
 	} state;
@@ -54,11 +56,6 @@ struct Session::Private
 	int save_and_cstate();
 	void ensure_connected();
 };
-
-static u16 __sdp_new_tid( Session::Private* )
-{
-	return 0;
-}
 
 void Session::Private::start_send()
 {
@@ -79,11 +76,11 @@ void Session::Private::ensure_connected()
 	if( state == CONNECTED )
 		return;
 
-	sock.disconnect();
+	sock.close();
 
 	state = INIT;
 
-	if( !sock.bind(src) || sock.set_blocking(false)< 0 || !sock.connect(dst) )
+	if( !sock.bind(src) || sock.set_blocking(false)< 0 || !sock.connect(dst,0/*TODO:flags*/) )
 		throw Error();
 }
 
@@ -98,7 +95,9 @@ int Session::Private::save_and_cstate()
 		{
 			/* get service record list length
 			*/
-			u16 current_records = ntohs(bt_get_unaligned((u16*)(tdata+sizeof(u16))));
+			//void* ptr = tdata+sizeof(u16);
+			//u16 current_records = ntohs(bt_get_unaligned((u16*)ptr)); //TODO: does not compile
+			u16 current_records = ntohs(*(u16*)(tdata+sizeof(u16)));
 			param_len = current_records*4;
 			break;
 		}
@@ -107,7 +106,8 @@ int Session::Private::save_and_cstate()
 		{
 			/* get attribute list(s) length
 			*/
-			param_len = ntohs(bt_get_unaligned((u16*)tdata));
+			//param_len = ntohs(bt_get_unaligned((u16*)tdata)); //TODO: does not compile
+			param_len = ntohs(*((u16*)tdata));
 			break;
 		}
 		default:
@@ -120,7 +120,7 @@ int Session::Private::save_and_cstate()
 		throw Error("pdu too large");
 	}
 	//ibuf....
-	//ibytes += 
+	ibuf.insert(ibuf.end(), tdata, tdata+param_len);
 
 	/* save continuation state
 	*/
@@ -128,7 +128,7 @@ int Session::Private::save_and_cstate()
 	u8 cstate_len = *tdata;
 
 	if(cstate_len)
-		cstate.assign(cstate_len, tdata, tdata+cstate_len);
+		cstate.assign(tdata, tdata+cstate_len);
 
 	tbuf.clear();
 
@@ -142,7 +142,7 @@ void Session::Private::can_read( FdNotifier& )
 		case WAITING:
 		{
 			u8 sf[64];
-			int len = sock.read(sf, sizeof(sf));
+			int len = sock.recv((char*)sf, sizeof(sf));
 			if( len < 0 )
 			{	
 				if( errno != EAGAIN && errno != EINTR )
@@ -153,11 +153,11 @@ void Session::Private::can_read( FdNotifier& )
 			}
 			else
 			{
-				tbuf.insert(tbuf.end(), sf, len);
+				tbuf.insert(tbuf.end(), sf, sf+len);
 
-				if( tbuf.size() >= sizeof(sdp_pdr_hdr_t) )
+				if( tbuf.size() >= sizeof(sdp_pdu_hdr_t) )
 				{
-					rsp = &tbuf[0];
+					rsp = (sdp_pdu_hdr_t*)&tbuf[0];
 					
 					if( tbuf.size() >= rsp->plen + sizeof(sdp_pdu_hdr_t) )
 					{
@@ -193,7 +193,7 @@ void Session::Private::can_write( FdNotifier& )
 		case INIT:
 		{
 			state = CONNECTED;
-			//fall thru\\
+			//fall thru
 		}
 		case CONNECTED:
 		{
@@ -213,16 +213,16 @@ void Session::Private::can_write( FdNotifier& )
 				{
 					/* send previous continuation state
 					*/
-					obuf.insert(obuf.end(),cstate);
+					obuf.insert(obuf.end(),cstate.begin(),cstate.end());
 				}
 
 				/* calc req size & set headers
 				*/
-				req->tid = __sdp_new_tid();
+				req->tid = 0;//__sdp_new_tid(); TODO
 				req->plen = obuf.size() - sizeof(sdp_pdu_hdr_t);
 			}
 
-			int len = sock.write(&obuf[obytes], obuf.size() - obytes);
+			int len = sock.send((char*)&obuf[obytes], obuf.size() - obytes);
 			if( len < 0 )
 			{
 				if( errno != EAGAIN && errno != EINTR )
@@ -236,7 +236,9 @@ void Session::Private::can_write( FdNotifier& )
 				obytes += len;
 				if( obytes >= obuf.size() )
 				{
-					obuf.resize(sizeof(sdp_pdu_hdr_t));
+					//deflate buffer
+					ByteVector small(sizeof(sdp_pdu_hdr_t));
+					small.swap(obuf);
 
 					state = WAITING;
 					notifier.flags( POLLIN );
@@ -258,12 +260,12 @@ Session::Session( BdAddr& src, BdAddr& dest )
 	pvt = new Private;
 	pvt->sess = this;
 	pvt->src = src;
-	pvt->dst = dst;
+	pvt->dst = dest;
 }
 
-void Session::start_service_search(  )
+void Session::start_service_search( DataElementList& service_pattern )
 {
-	if( state != Session::Private::IDLE )
+	if( pvt->state != Session::Private::IDLE )
 		throw Error(EAGAIN);
 
 	/* start writing header
