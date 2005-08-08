@@ -143,7 +143,9 @@ public:
 
 	inline bool destination( const char* s );
 
-	inline bool is_error();
+	inline bool is_error() const;
+
+	inline bool is_signal( const char* interface, const char* member ) const;
 
 	inline MessageIter r_iter() const;
 
@@ -207,9 +209,14 @@ bool Message::destination( const char* s )
 	return dbus_message_set_destination(_message, s);
 }
 
-bool Message::is_error()
+bool Message::is_error() const
 {
 	return type() == DBUS_MESSAGE_TYPE_ERROR;
+}
+
+bool Message::is_signal( const char* interface, const char* member ) const
+{
+	return dbus_message_is_signal(_message, interface, member);
 }
 
 MessageIter Message::w_iter()

@@ -30,9 +30,9 @@ Connection::Connection( DBusBusType type )
 
 	if(e) throw e;
 
-	//_debug_filter.filtered.connect( sigc::mem_fun(*this, &Connection::_debug_filter_function) );
+	_disconn_filter.filtered.connect( sigc::mem_fun(*this, &Connection::_disconn_filter_function) );
 
-	//add_filter(_debug_filter);
+	add_filter(_disconn_filter);
 
 	init();
 }
@@ -355,6 +355,17 @@ DBusHandlerResult Connection::message_filter_stub( DBusConnection*, DBusMessage*
 	return f && !f->filtered.empty() && f->filtered(msg) 
 			? DBUS_HANDLER_RESULT_HANDLED
 			: DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+bool Connection::_disconn_filter_function( Message& msg )
+{
+	if(msg.is_signal(DBUS_INTERFACE_LOCAL,"Disconnected"))
+	{
+		cbus_dbg("%p disconnected by local bus",_connection);
+		disconnect();
+		return true;
+	}
+	return false;
 }
 
 }//namespace DBus

@@ -110,6 +110,8 @@ private:
 
 //	ObjectPList	_registered_objects;
 
+	Filter		_disconn_filter;
+	bool		_disconn_filter_function( Message& );
 //	Filter		_debug_filter;
 //	bool		_debug_filter_function( Message& );
 
