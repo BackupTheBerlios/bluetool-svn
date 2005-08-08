@@ -1,13 +1,4 @@
-#include "../hcidevice.h"
-
-#include <cstring>
-
-#include <sys/ioctl.h>
-#include <sys/errno.h>
-
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
+#include "hcidevice_p.h"
 
 namespace Hci
 {
@@ -35,84 +26,47 @@ LocalDevices LocalDevice::enumerate()
 	return ret;
 }
 
-/* internal representation of a hci request
+/*	device control
 */
 
-struct Request;
-typedef std::list<Request*> Requests;
+void LocalDevice::up( int dev_id )
+{
+	Socket sock;
+	if( ioctl(sock.handle(), HCIDEVUP, dev_id) < 0 && errno != EALREADY )
+		throw Exception();
+}
+
+void LocalDevice::down( int dev_id )
+{
+	Socket sock;
+	if( ioctl(sock.handle(), HCIDEVDOWN, dev_id) < 0 )
+		throw Exception();
+}
+
+void LocalDevice::reset( int dev_id )
+{
+	up(dev_id);
+	down(dev_id);
+}
 
 /*
 */
 
-struct Request
+Request::Request()
 {
-	u16	ogf;
-	u16	ocf;
-	int	event;
-	void*	cmd;
-	int	clen;
-	EventPacket* evt;
-	int	elen;
+	memset(&hr, 0, sizeof(hr));
+	memset(iobuf, 0, sizeof(iobuf));
+	memset(&ch, 0, sizeof(ch));
+}
 
-	/*	buffering
-	*/	
-	iovec iobuf[3];
-	int ion;
-	u8 type;
-	hci_command_hdr ch;
-
-	/* synchronization
-	*/
-	Timeout to;
-
-	/* status
-	*/
-	
-	enum
-	{	QUEUED,		
-		WRITING,
-		WAITING,
-		TIMEDOUT,
-		COMPLETE
-	} status;
-
-	/* caller tracking
-	*/
-	void* cookie;
-	
-	/* queue position
-	*/
-	Requests::iterator iter;
-};
-
-
-struct LocalDevice::Private
+Request::~Request()
 {
-	void open( int dev_id );
-
-	void post_req( Request* );
-	void fire_event( Request*, Filter& );
-
-	void read_ready( FdNotifier& );
-	void write_ready( FdNotifier& );
-
-	void req_timedout( Timeout& );
-
-	/**/
-
-	Socket	dd;
-	int	id;
-
-	FdNotifier	notifier;
-	Requests	dispatchq;
-	Requests	waitq;
-
-	LocalDevice*	parent;
-};
+	if(hr.cparam) delete[] (u8*)hr.cparam;
+	if(hr.rparam) delete[] (u8*)hr.rparam;
+}
 
 /*
 */
-
 
 void LocalDevice::Private::open( int dev_id )
 {
@@ -137,22 +91,23 @@ void LocalDevice::Private::open( int dev_id )
 void LocalDevice::Private::post_req( Request* req )
 {
 	req->type = HCI_COMMAND_PKT;
-	req->ch.opcode = htobs(cmd_opcode_pack( req->ogf, req->ocf ));
-	req->ch.plen = req->clen;
+	req->ch.opcode = htobs(cmd_opcode_pack( req->hr.ogf, req->hr.ocf ));
+	req->ch.plen = req->hr.clen;
 	req->iobuf[0].iov_base	= &req->type;
 	req->iobuf[0].iov_len	= 1;
 	req->iobuf[1].iov_base	= &req->ch;
 	req->iobuf[1].iov_len	= HCI_COMMAND_HDR_SIZE;
-	if( req->clen )
+	if( req->hr.clen )
 	{
-		req->iobuf[2].iov_base	= req->cmd;
-		req->iobuf[2].iov_len	= req->clen;
+		req->iobuf[2].iov_base	= req->hr.cparam;
+		req->iobuf[2].iov_len	= req->hr.clen;
 		req->ion = 3;
 	}
 	else req->ion = 2;
 
 	req->to.data( req );
 	req->to.timed_out.connect( sigc::mem_fun( this, &Private::req_timedout ));
+	req->to.start();
 
 	req->status = Request::QUEUED;
 	dispatchq.push_front(req);
@@ -166,9 +121,7 @@ void LocalDevice::Private::req_timedout( Timeout& t )
 	Request* r = static_cast<Request*>(t.data());
 	r->status = Request::TIMEDOUT;
 	r->to.stop();
-	Filter f;
-	dd.get_filter(f);
-	fire_event( r, f );
+	fire_event(r);
 	//notifier.flags( notifier.flags() | POLLOUT );	//force dispatch queue flush
 }
 
@@ -186,16 +139,18 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	{
         	if (errno == EAGAIN || errno == EINTR)
 			continue;
-		throw Exception();
+		throw Exception(); // todo, this obviously terminates the program
 	}
 	eh = (hci_event_hdr *) (buf + 1);
 	ptr = buf + (1 + HCI_EVENT_HDR_SIZE);
 	len -= (1 + HCI_EVENT_HDR_SIZE);
 
 	Requests::reverse_iterator ri = waitq.rbegin();
+	Request* pr;
 	while( ri != waitq.rend() )
 	{
-		if( (*ri)->status == Request::WAITING )
+		pr = (*ri);
+		if( pr->status == Request::WAITING )
 		{
 			switch (eh->evt) {
 
@@ -203,7 +158,7 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 
 				cs = (evt_cmd_status *) ptr;
 
-				if (cs->opcode != (*ri)->ch.opcode)
+				if (cs->opcode != pr->ch.opcode)
 					break;
 
 				if (cs->status)
@@ -217,33 +172,34 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 
 				cc = (evt_cmd_complete *) ptr;
 
-				if (cc->opcode != (*ri)->ch.opcode)
+				if (cc->opcode != pr->ch.opcode)
 					break;
+
+				pr->hr.event = EVT_CMD_COMPLETE; //here or post_req() ?
 
 				ptr += EVT_CMD_COMPLETE_SIZE;
 				len -= EVT_CMD_COMPLETE_SIZE;
 
-				(*ri)->elen = MIN(len, (*ri)->elen);
-				(*ri)->evt = (EventPacket*) malloc((*ri)->elen);
-				memcpy((*ri)->evt, ptr, (*ri)->elen);
+				pr->hr.rlen = MIN(len, pr->hr.rlen);
+				pr->hr.rparam = malloc(pr->hr.rlen);
+				memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
 				goto _fire;
 
 			default:
-				if (eh->evt != (*ri)->event)
+				if (eh->evt != pr->hr.event)
 					break;
 
-				(*ri)->elen = MIN(len, (*ri)->elen);
-				(*ri)->evt = (EventPacket*) malloc((*ri)->elen);
-				memcpy((*ri)->evt, ptr, (*ri)->elen);
+				pr->hr.rlen = MIN(len, pr->hr.rlen);
+				pr->hr.rparam = malloc(pr->hr.rlen);
+				memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
 				goto _fire;
 			}
 		}
 		++ri;
 	}
 	return;
-_fire:	Filter of;
-	dd.get_filter(of);
-	fire_event( (*ri), of );
+_fire:	pr->status = Request::COMPLETE;
+	fire_event(pr);
 }
 
 void LocalDevice::Private::write_ready( FdNotifier& fn )
@@ -258,9 +214,11 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 	dd.get_filter(of);
 
 	Requests::reverse_iterator ri = dispatchq.rbegin();
+	Request* pr;
 	while( ri != dispatchq.rend() )
 	{
-		switch( (*ri)->status )
+		pr = (*ri);
+		switch( pr->status )
 		{
 			case Request::WRITING:
 			{
@@ -268,24 +226,24 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 			}
 			case Request::QUEUED:
 			{
-				if(	(*ri)->event == EVT_CMD_STATUS || 
-					(*ri)->event == EVT_CMD_COMPLETE &&
+				if(	pr->hr.event == EVT_CMD_STATUS || 
+					pr->hr.event == EVT_CMD_COMPLETE &&
 					of.opcode() ||
-					of.test_event((*ri)->event)
+					of.test_event(pr->hr.event)
 				)
 					break;
 
-				(*ri)->status = Request::WRITING;
+				pr->status = Request::WRITING;
 				goto _write;
 			}
 			case Request::TIMEDOUT:
-			{	//timeouts are supposed to be on the other queue
-				(*ri)->status = Request::WAITING;
-				dispatchq.erase( (*ri)->iter );
-				waitq.push_front(*ri);
-				(*ri)->iter = waitq.begin();
+			{	//timeouts are supposed to be in the other queue
+				pr->status = Request::WAITING;
+				dispatchq.erase( pr->iter );
+				waitq.push_front(pr);
+				pr->iter = waitq.begin();
 
-				fire_event( (*ri), of );
+				fire_event(pr);
 				break;
 
 			}
@@ -297,54 +255,63 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 	}
 	return;
 
-_write:	if(	(*ri)->event == EVT_CMD_STATUS || 
-		(*ri)->event == EVT_CMD_COMPLETE	
+_write:	if(	pr->hr.event == EVT_CMD_STATUS || 
+		pr->hr.event == EVT_CMD_COMPLETE	
 	)
-		of.set_opcode( htobs(cmd_opcode_pack((*ri)->ogf, (*ri)->ocf)) );
+		of.set_opcode( htobs(cmd_opcode_pack(pr->hr.ogf, pr->hr.ocf)) );
 	else
-		of.set_event( (*ri)->event );
+		of.set_event( pr->hr.event );
 
 	dd.set_filter(of);
 
-	if( writev(dd.handle(), (*ri)->iobuf, (*ri)->ion) < 0 )
+	if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 	{
 		if (errno == EAGAIN || errno == EINTR)
 			return;
 	}
 	else
 	{
-		(*ri)->status = Request::WAITING;
-		dispatchq.erase( (*ri)->iter );
-		waitq.push_front(*ri);
-		(*ri)->iter = waitq.begin();
+		pr->status = Request::WAITING;
+		dispatchq.erase( pr->iter );
+		waitq.push_front(pr);
+		pr->iter = waitq.begin();
 	}
 }
 
-void LocalDevice::Private::fire_event( Request* req, Filter& of )
+void LocalDevice::Private::fire_event( Request* req )
 {
+	Filter of;
+
+	EventPacket evt;
+	evt.code  = req->hr.event;
+	evt.ogf   = req->hr.ogf;
+	evt.ocf   = req->hr.ocf;
+	evt.edata = req->hr.rparam;
+
 	if( req->status == Request::TIMEDOUT )
 	{
-		parent->on_event( *(req->evt), req->cookie, true );
+		parent->on_event( evt, req->cookie, true );
 	}
 	else if( req->status == Request::COMPLETE )
 	{
-		parent->on_event( *(req->evt), req->cookie, false );
+		parent->on_event( evt, req->cookie, false );
 	}
-	else return;
+	else goto cleanreq;
 
-	if(	req->event == EVT_CMD_STATUS || 
-		req->event == EVT_CMD_COMPLETE	
+	dd.get_filter(of);
+
+	if(	req->hr.event == EVT_CMD_STATUS || 
+		req->hr.event == EVT_CMD_COMPLETE	
 	)
 		of.clear_opcode();
 	else
-		of.clear_event( req->event );
+		of.clear_event( req->hr.event );
 
 	dd.set_filter(of);
 
-	free( req->evt );	//we used malloc here
-	delete[] (u8*)req->cmd;	//TODO: creepy!
-	waitq.erase( req->iter );
+cleanreq:
 
+	waitq.erase( req->iter );
 	delete req;
 }
 
@@ -388,30 +355,13 @@ int LocalDevice::id() const
 	return pvt->id;
 }
 
-int _hci_devinfo( int dd, int id, hci_dev_info* di )
+/*
+*/
+
+int __hci_devinfo( int dd, int id, hci_dev_info* di )
 {
 	di->dev_id = id;
 	return ioctl(dd, HCIGETDEVINFO, (void*)di);
-}
-
-/*	device control, todo: the file handle must be unbound?
-*/
-void LocalDevice::up()
-{
-	if( ioctl(pvt->dd.handle(), HCIDEVUP, id()) < 0 && errno != EALREADY )
-		throw Exception();
-}
-
-void LocalDevice::down()
-{
-	if( ioctl(pvt->dd.handle(), HCIDEVDOWN, id()) < 0 )
-		throw Exception();
-}
-
-void LocalDevice::reset()
-{
-	up();
-	down();
 }
 
 /*	device properties
@@ -430,7 +380,7 @@ bool LocalDevice::auth_enable()
 {
 	hci_dev_info di;
 
-	if( _hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_AUTH, &di.flags);
@@ -450,7 +400,7 @@ bool LocalDevice::encrypt_enable()
 {
 	hci_dev_info di;
 
-	if( _hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_ENCRYPT, &di.flags);
@@ -467,7 +417,7 @@ bool LocalDevice::secman_enable()
 {
 	hci_dev_info di;
 
-	if( _hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_SECMGR, &di.flags);
@@ -489,7 +439,7 @@ bool LocalDevice::pscan_enable()
 {
 	hci_dev_info di;
 
-	if( _hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_PSCAN, &di.flags);
@@ -512,26 +462,45 @@ bool LocalDevice::iscan_enable()
 {
 	hci_dev_info di;
 
-	if( _hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_ISCAN, &di.flags);
 }
 
-static char __dev_name[128];
-
-const char* LocalDevice::local_name()
+void LocalDevice::local_name( int timeout, void* cookie )
 {
-	if( hci_read_local_name(pvt->dd.handle(), sizeof(__dev_name), __dev_name, 1000) < 0 )
-		throw Exception();
+	read_local_name_rp* rp = new read_local_name_rp;
 
-	return __dev_name; //shared pointer, multithread nightmare, shouldn't be a problem anyway
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_LOCAL_NAME;
+	req->hr.rparam = rp;
+	req->hr.rlen   = READ_LOCAL_NAME_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
 }
 
-void LocalDevice::local_name( const char* name )
+void LocalDevice::local_name( const char* name, int timeout, void* cookie )
 {
-	if( hci_write_local_name(pvt->dd.handle(), name, 2000) < 0 )
-		throw Exception();
+	change_local_name_cp* cp = new change_local_name_cp;
+
+	memset(cp, 0, sizeof(*cp));
+	strncpy((char*)cp->name, name, sizeof(cp->name));
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_CHANGE_LOCAL_NAME;
+	req->hr.cparam = cp;
+	req->hr.clen   = CHANGE_LOCAL_NAME_CP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
 }
 
 /*	device operations
@@ -554,15 +523,15 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 	cp->num_rsp = 0;
 
 	Request* req = new Request;
-	req->ogf    = OGF_LINK_CTL;
-	req->ocf    = OCF_INQUIRY;
-	req->event  = EVT_INQUIRY_RESULT;
-	req->cmd    = cp;
-	req->clen   = INQUIRY_CP_SIZE;
-	req->evt    = NULL;
-	req->elen   = INQUIRY_INFO_SIZE;
-	req->cookie = cookie;
+	req->hr.ogf    = OGF_LINK_CTL;
+	req->hr.ocf    = OCF_INQUIRY;
+	req->hr.event  = EVT_INQUIRY_RESULT;
+	req->hr.cparam = cp;
+	req->hr.clen   = INQUIRY_CP_SIZE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = INQUIRY_INFO_SIZE;
 
+	req->cookie = cookie;
 	req->to.interval(11000);
 
 	pvt->post_req(req);

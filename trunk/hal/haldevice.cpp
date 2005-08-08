@@ -29,7 +29,7 @@ bool HalDevice::QueryCapability( const char* capability )
 
 //	DBus::MessageIter iter = msg.w_iter();
 //	iter.append_string(capability);
- 	msg.write("%s", DBUS_TYPE_STRING, &capability, DBUS_TYPE_INVALID);
+ 	msg.append(DBUS_TYPE_STRING, &capability, DBUS_TYPE_INVALID);
 
 	/*	invoke remote method
 	*/
@@ -70,12 +70,6 @@ bool HalDevice::PropertyExists( const char* property )
 	*/
 	DBus::Message reply = conn().send_blocking(msg, 1000);
 
-	//hal_dbg("returned");
-	/*	wait...
-	*/
-	//if(reply.is_error())
-	//	throw DBus::Error(reply);
-
 	DBus::MessageIter ri = reply.r_iter();
 	return ri.get_bool();
 }
@@ -92,19 +86,11 @@ const char* HalDevice::GetPropertyString( const char* property )
 		"GetPropertyString"
 	);
 
-//	DBus::MessageIter iter = msg.w_iter();
-//	iter.append_string(property);
- 	msg.write("%s", DBUS_TYPE_STRING, &property, DBUS_TYPE_INVALID);
+ 	msg.append(DBUS_TYPE_STRING, &property, DBUS_TYPE_INVALID);
 
 	/*	invoke remote method
 	*/
 	DBus::Message reply = conn().send_blocking(msg, 1000);
-
-	//hal_dbg("returned");
-	/*	wait...
-	*/
-	//if(reply.is_error())
-	//	throw DBus::Error(reply);
 
 	DBus::MessageIter ri = reply.r_iter();
 	return ri.get_string();

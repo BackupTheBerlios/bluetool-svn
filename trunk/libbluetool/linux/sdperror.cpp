@@ -5,15 +5,15 @@
 namespace Sdp
 {
 
-Error:Error()
+Error::Error()
 : _code(errno), _what(NULL)
 {}
 
-Error:Error( u16 code )
+Error::Error( u16 code )
 : _code(code), _what(NULL)
 {}
 
-Error:Error( const char* what )
+Error::Error( const char* what )
 : _code(0), _what(what)
 {}
 

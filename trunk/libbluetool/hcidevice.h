@@ -30,8 +30,16 @@ namespace Hci
 class LocalDevice : public RefCnt
 {
 public:
-	
+
+/*	device enumeration
+*/	
 	static LocalDevices enumerate();
+
+/*	device control
+*/	
+	static void up( int dev_id );
+	static void down( int dev_id );
+	static void reset( int dev_id );
 
 public:
 
@@ -44,12 +52,6 @@ public:
 	Socket& descriptor();
 
 	int id() const;
-
-/*	device control
-*/	
-	void up();
-	void down();
-	void reset();
 
 /*	device properties
 */
@@ -68,8 +70,8 @@ public:
 	void iscan_enable( bool );
 	bool iscan_enable();
 
-	void local_name( const char* );
-	const char* local_name();
+	void local_name( const char*, int timeout, void* cookie );
+	void local_name( int timeout, void* cookie );
 
 /*	device operations
 */

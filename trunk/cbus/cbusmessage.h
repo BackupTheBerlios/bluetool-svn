@@ -149,9 +149,13 @@ public:
 
 	inline MessageIter w_iter();
 
-	bool read( const char* format, int first_type, ... ) const;
+//	bool read( const char* format, int first_type, ... ) const;
 
-	bool write( const char* format, int first_type, ... );
+//	bool write( const char* format, int first_type, ... );
+
+	bool append( int first_type, ... );
+
+	void terminate();
 
 protected:
 
@@ -159,7 +163,7 @@ protected:
 
 	inline void unref();
 
-protected:
+public://testing
 	DBusMessage *_message;
 
 /*	classes who need to read `_message` directly

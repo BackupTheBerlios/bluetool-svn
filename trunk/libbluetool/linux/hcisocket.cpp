@@ -1,4 +1,5 @@
 #include "../hcisocket.h"
+#include "hcifilter_p.h"
 
 #include <unistd.h>
 #include <errno.h>
@@ -30,13 +31,13 @@ bool Socket::bind( int id )
 
 bool Socket::get_filter( Filter& flt )
 {
-	socklen_t len;
-	return ::getsockopt(this->handle(), SOL_HCI, HCI_FILTER, &flt._filter, &len) >= 0;
+	socklen_t len = sizeof(flt.pvt->filter);
+	return ::getsockopt(this->handle(), SOL_HCI, HCI_FILTER, &(flt.pvt->filter), &len) >= 0;
 }
 
 bool Socket::set_filter( const Filter& flt )
 {
-	return ::setsockopt(this->handle(), SOL_HCI, HCI_FILTER, &flt._filter, sizeof(flt._filter) ) >= 0;
+	return ::setsockopt(this->handle(), SOL_HCI, HCI_FILTER, &(flt.pvt->filter), sizeof(flt.pvt->filter) ) >= 0;
 }
 
 }//namespace Hci

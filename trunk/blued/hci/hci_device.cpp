@@ -1,3 +1,6 @@
+#include <bluetooth/bluetooth.h>
+#include <bluetooth/hci.h>
+
 #include "../bluedebug.h"
 #include "hci_device.h"
 
@@ -37,8 +40,10 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	try
 	{
 
-	DBus::ReturnMessage reply( msg );
-	DBus::MessageIter wr = reply.w_iter();
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage( msg );
+
+	DBus::MessageIter wr = reply->w_iter();
+//	wr.append_bool(true);
 
 	
 	if( property == "auth_enable" )
@@ -88,7 +93,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	else
 	if( property == "local_name" )
 	{
-		wr.append_string( _device.local_name() );
+		_device.local_name( 20000, reply );
 	}
 	
 	else
@@ -160,15 +165,15 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	{
 	}
 		//send ok reply
-		conn().send(reply);
-	
+		//wr.append_string( _device.local_name() );
+		//reply.terminate();
+		conn().send(*reply);
 	}
 	catch( Hci::Exception& e )
 	{
 		//send error back to caller
 		blue_dbg("hci: %s",e.what());
 	}
-	
 }
 
 void HciDevice::SetProperty( const DBus::CallMessage& msg )
@@ -181,8 +186,8 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	try
 	{
 
-	DBus::ReturnMessage reply( msg );
-	DBus::MessageIter wr = reply.w_iter();
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
+	DBus::MessageIter wr = reply->w_iter();
 
 	if( property == "auth_enable" )
 	{
@@ -242,7 +247,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	if( property == "local_name" )
 	{
 		const char* name = i.get_string();
-		_device.local_name(name);
+		_device.local_name(name, 1000, reply);
 	}
 	
 	else
@@ -316,7 +321,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	
 		
 		//everything went fine, reply
-		conn().send(reply);
+		conn().send(*reply);
 	
 	}
 	catch( Hci::Exception& e )
@@ -334,6 +339,82 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 
 void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool timedout )
 {
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
+	if( timedout )
+	{
+		
+	}
+
+	switch( evt.code )
+	{
+		case EVT_CMD_STATUS:
+		{
+			handle_command_status(evt,reply);
+			break;
+		}
+		case EVT_CMD_COMPLETE:
+		{
+			handle_command_complete(evt,reply);
+			break;
+		}
+	}
+
+	conn().send(*reply);
+
+	delete reply;
 }
 
+void HciDevice::handle_command_status( const Hci::EventPacket& evt, DBus::ReturnMessage* rpl )
+{
+}
+
+void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::ReturnMessage* rpl )
+{
+	switch( evt.ogf )
+	{
+		case OGF_LINK_CTL:
+		{
+			switch( evt.ocf )
+			{
+			}
+			break;
+		}
+		case OGF_LINK_POLICY:
+		{
+			switch( evt.ocf )
+			{
+			}
+			break;
+		}
+		case OGF_HOST_CTL:
+		{
+			switch( evt.ocf )
+			{
+				case OCF_CHANGE_LOCAL_NAME:
+				{
+					break;
+				}
+				case OCF_READ_LOCAL_NAME:
+				{
+					read_local_name_rp* r = (read_local_name_rp*)evt.edata;
+					blue_dbg("local name request returned '%s'",r->name);
+					
+					break;
+				}
+			}
+			break;
+		}
+		case OGF_INFO_PARAM:
+		{
+			switch( evt.ocf )
+			{
+			}
+			break;
+		}
+		case OGF_STATUS_PARAM:
+		{
+			break;
+		}
+	}
+}

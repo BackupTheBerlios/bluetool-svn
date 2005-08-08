@@ -70,8 +70,8 @@ struct Monitor::Private
 	
 			if( flags & DBUS_WATCH_READABLE )
 				pflags |= POLLIN;
-		//	if( flags & DBUS_WATCH_WRITABLE )
-		//		pflags |= POLLOUT;
+			if( flags & DBUS_WATCH_WRITABLE )
+				pflags |= POLLOUT;
 
 			fn->flags(pflags);
 		}
@@ -108,9 +108,9 @@ struct Monitor::Private
 
 	void rem_timeout( DBusTimeout* );
 
-	void fd_ready_in( FdNotifier& );
+	void fd_ready( FdNotifier& );
 
-	void fd_ready_out( FdNotifier& );
+	//void fd_ready_out( FdNotifier& );
 
 	void timeout_ready( Timeout& );
 
@@ -134,14 +134,14 @@ void Monitor::Private::add_watch( DBusWatch* w )
 		flags |= POLLIN;
 
 	//todo, it's buggy
-	//if( wflags & DBUS_WATCH_WRITABLE )
-	//	flags |= POLLOUT;
+//	if( wflags & DBUS_WATCH_WRITABLE )
+//		flags |= POLLOUT;
 
 	FdNotifier* fn = new FdNotifier( dbus_watch_get_fd(w), flags );
 
 	fn->data(w);
-	fn->can_read.connect( sigc::mem_fun(*this, &Monitor::Private::fd_ready_in) );
-	fn->can_write.connect( sigc::mem_fun(*this, &Monitor::Private::fd_ready_out) );
+	fn->can_read.connect( sigc::mem_fun(*this, &Monitor::Private::fd_ready) );
+	fn->can_write.connect( sigc::mem_fun(*this, &Monitor::Private::fd_ready) );
 
 	
  	dbus_watch_set_data(w, fn, 0);
@@ -211,15 +211,29 @@ void Monitor::do_dispatch()
 	cbus_dbg("pure virtual do_dispatch() called");
 }
 
-void Monitor::Private::fd_ready_in( FdNotifier& fn )
+void Monitor::Private::fd_ready( FdNotifier& fn )
 {
 	DBusWatch* dw = static_cast<DBusWatch*>(fn.data());
 
 	/*	to notify the library internals
 	*/
-	dbus_watch_handle(dw, DBUS_WATCH_READABLE);
+	int flags = 0;
 
-	cbus_dbg("watch %p ready (I)", dw);
+	if (fn.state() & POLLIN)
+		flags |= DBUS_WATCH_READABLE;
+	if (fn.state() & POLLOUT)
+		flags |= DBUS_WATCH_WRITABLE;
+	if (fn.state() & POLLHUP)
+		flags |= DBUS_WATCH_HANGUP;
+	if (fn.state() & POLLERR)
+		flags |= DBUS_WATCH_ERROR;
+
+	dbus_watch_handle(dw, flags);
+
+	cbus_dbg("watch %p ready (%c%c%c%c)", dw, 	fn.state() & POLLIN  ? 'R' : '_',
+							fn.state() & POLLOUT ? 'W' : '_',
+							fn.state() & POLLHUP ? 'H' : '_',
+							fn.state() & POLLERR ? 'E' : '_');
 
 
 	parent->do_dispatch();
@@ -243,6 +257,7 @@ void Monitor::Private::fd_ready_in( FdNotifier& fn )
 	*/
 }
 
+#if 0
 void Monitor::Private::fd_ready_out( FdNotifier& fn )
 {
 	DBusWatch* dw = static_cast<DBusWatch*>(fn.data());
@@ -251,9 +266,11 @@ void Monitor::Private::fd_ready_out( FdNotifier& fn )
 
 	/*	to notify the library internals
 	*/
-/*	dbus_watch_handle(dw, DBUS_WATCH_WRITABLE);
+	dbus_watch_handle(dw, DBUS_WATCH_WRITABLE);
 
-	if(parent->_dispatch_pending)
+	parent->do_dispatch();
+
+/*	if(parent->_dispatch_pending)
 	{
 		cbus_dbg("dispatching on %p", ptr.connection);
 
@@ -262,6 +279,7 @@ void Monitor::Private::fd_ready_out( FdNotifier& fn )
 		parent->_dispatch_pending = false;
 	}*/
 }
+#endif
 
 void Monitor::Private::timeout_ready( Timeout& t )
 {

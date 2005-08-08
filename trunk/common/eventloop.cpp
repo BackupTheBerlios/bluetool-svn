@@ -97,6 +97,8 @@ void EventLoop::enter()
 			{	
 				if( (*fit)->fd() == fds[i].fd )
 				{
+					(*fit)->state( fds[i].revents );
+
 					if( fds[i].revents & POLLIN )
 					{
 						(*fit)->can_read( *(*fit) );

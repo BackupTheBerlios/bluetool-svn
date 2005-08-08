@@ -16,9 +16,9 @@ struct EventPacket;
 
 typedef sigc::signal<void, EventPacket&, void*, bool> Event;
 
-typedef u16 bstatus;
-typedef u16 hcihandle;
-typedef u8 baddr[6];
+//typedef u16 bstatus;
+//typedef u16 hcihandle;
+//typedef u8 baddr[6];
 
 /*	HCI Event Packet
 */
@@ -26,7 +26,11 @@ typedef u8 baddr[6];
 struct EventPacket
 {
 u8	code;
+u8	ogf;
+u8	ocf;
+void*	edata;
 
+#if 0
 union 
 {
 	struct __PACKED
@@ -232,7 +236,7 @@ union
 		u8		pscan_rep_mode;
 	} page_scan_repetition_mode;
 };
-
+#endif
 };
 
 }//namespace Hci

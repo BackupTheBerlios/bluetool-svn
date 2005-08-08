@@ -21,9 +21,11 @@ public:
 
 	int fd() const;
 	int flags() const;
+	int state() const;
 	
 	void fd( int );
 	void flags( int );
+	void state( int );
 
 	void data( void* );
 	void* data() const;

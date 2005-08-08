@@ -18,69 +18,38 @@ class Filter
 
 public:
 
-	Filter()
-	{
-		clear();
-	}
+	Filter();
 
-	void clear()
-	{
-		_filter.type_mask = 0;
-		_filter.event_mask = 0;
-		_filter.opcode = 0;
-	}
+	Filter( const Filter& );
 
-	void set_type( int bit )
-	{
-		bit_set(_filter.type_mask, 32, bit);
-	}
-	void clear_type( int bit )
-	{
-		bit_clear(_filter.type_mask, 32, bit);
-	}
-	bool test_type( int bit )
-	{
-		return bit_test(_filter.type_mask, 32, bit);
-	}
+	~Filter();
 
-	void set_event( int bit )
-	{
-		bit_set(_filter.event_mask, 64, bit);
-	}
-	void clear_event( int bit )
-	{
-		bit_clear(_filter.event_mask, 64, bit);
-	}
-	bool test_event( int bit )
-	{
-		return bit_test(_filter.event_mask, 64, bit);
-	}
+	void clear();
 
-	u16 opcode()
-	{
-		return _filter.opcode;
-	}
-	void set_opcode( u16 opcode )
-	{
-		_filter.opcode = opcode;
-	}
-	void clear_opcode()
-	{
-		_filter.opcode = 0;
-	}
-	bool test_opcode( u16 opcode )
-	{
-		return opcode == _filter.opcode;
-	}
+	void set_type( int bit );
+
+	void clear_type( int bit );
+
+	bool test_type( int bit );
+
+	void set_event( int bit );
+
+	void clear_event( int bit );
+
+	bool test_event( int bit );
+
+	u16 opcode();
+
+	void set_opcode( u16 opcode );
+
+	void clear_opcode();
+
+	bool test_opcode( u16 opcode );
 
 private:
-
-	struct
-	{
-		u32	type_mask;
-		u64	event_mask;
-		u16	opcode;
-	} _filter;
+	
+	struct Private;
+	Private* pvt;
 
 friend class Socket;
 };

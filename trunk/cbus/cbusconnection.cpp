@@ -123,15 +123,15 @@ void Connection::remove_filter( Filter& f )
 
 bool Connection::send( const Message& msg, unsigned int* serial )
 {
-	return dbus_connection_send(_connection, msg._message, serial);
-/*	if(dbus_connection_send(_connection, msg._message, serial))
+//	return dbus_connection_send(_connection, msg._message, serial);
+	if(dbus_connection_send(_connection, msg._message, serial))
 	{
 		//_dispatch_pending = true;
 		//do_dispatch();
-		dbus_connection_flush(_connection);
+		//dbus_connection_flush(_connection);
 		return true;
 	}
-	return false;*/
+	return false;
 }
 
 Message Connection::send_blocking( Message& msg, int timeout )

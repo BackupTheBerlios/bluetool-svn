@@ -170,10 +170,11 @@ bool RemoteObject::handle_message( const Message& msg )
 	{
 		case DBUS_MESSAGE_TYPE_SIGNAL:
 		{
-			cbus_dbg("filtered signal from remote object %s", msg.sender());
-
 			const SignalMessage& smsg = reinterpret_cast<const SignalMessage&>(msg);
 			const char* interface	= smsg.interface();
+			const char* member	= smsg.member();
+
+			cbus_dbg("filtered signal %s(in %s) from remote object %s", member, interface, msg.sender());
 
 			InterfaceTable::const_iterator ii = _interfaces.find(interface);
 			if( ii != _interfaces.end() )

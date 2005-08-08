@@ -30,6 +30,9 @@ public:
 private:
 	void on_hci_event( const Hci::EventPacket&, void* cookie, bool timedout );
 
+	void handle_command_status( const Hci::EventPacket&, DBus::ReturnMessage* rpl );
+	void handle_command_complete( const Hci::EventPacket&, DBus::ReturnMessage* rpl );
+
 private:
 	Hci::LocalDevice	_device;
 };

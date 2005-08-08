@@ -7,6 +7,7 @@ struct FdNotifier::Private
 {
 	int	fd;
 	int	flags;
+	int	state;
 	void*	data;
 };
 
@@ -15,6 +16,7 @@ FdNotifier::FdNotifier( int fd, int flags )
 	pvt = new Private;
 	pvt->fd = fd;
 	pvt->flags = flags;
+	pvt->state = 0;
 	pvt->data = NULL;
 
 	g_fdnotifier_plist.push_back(this);
@@ -54,6 +56,16 @@ int FdNotifier::flags() const
 void FdNotifier::flags( int f )
 {
 	pvt->flags = f;
+}
+
+int FdNotifier::state() const
+{
+	return pvt->state;
+}
+
+void FdNotifier::state( int s )
+{
+	pvt->state = s;
 }
 
 void* FdNotifier::data() const
