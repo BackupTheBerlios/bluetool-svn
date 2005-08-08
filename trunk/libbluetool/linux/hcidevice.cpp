@@ -503,6 +503,74 @@ void LocalDevice::local_name( const char* name, int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
+void LocalDevice::get_class( int timeout, void* cookie )
+{
+	read_class_of_dev_rp* rp = new read_class_of_dev_rp;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_CLASS_OF_DEV;
+	req->hr.rparam = rp;
+	req->hr.rlen   = READ_CLASS_OF_DEV_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
+void LocalDevice::set_class( u32 cls, int timeout, void* cookie )
+{
+	write_class_of_dev_cp* cp = new write_class_of_dev_cp;
+	cp->dev_class[0] = cls & 0xff;
+	cp->dev_class[1] = (cls >> 8) & 0xff;
+	cp->dev_class[2] = (cls >> 16) & 0xff;	
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_WRITE_CLASS_OF_DEV;
+	req->hr.cparam = cp;
+	req->hr.clen   = WRITE_CLASS_OF_DEV_CP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
+void LocalDevice::get_voice_setting( int timeout, void* cookie )
+{
+	read_voice_setting_rp* rp = new read_voice_setting_rp;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_VOICE_SETTING;
+	req->hr.rparam = rp;
+	req->hr.rlen   = READ_VOICE_SETTING_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
+void LocalDevice::set_voice_setting( u16 vs, int timeout, void* cookie )
+{
+	write_voice_setting_cp* cp = new write_voice_setting_cp;
+	cp->voice_setting = vs;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_WRITE_VOICE_SETTING;
+	req->hr.cparam = cp;
+	req->hr.clen   = WRITE_VOICE_SETTING_CP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
 /*	device operations
 */
 

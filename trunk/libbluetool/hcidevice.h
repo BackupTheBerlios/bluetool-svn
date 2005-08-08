@@ -70,8 +70,14 @@ public:
 	void iscan_enable( bool );
 	bool iscan_enable();
 
-	void local_name( const char*, int timeout, void* cookie );
 	void local_name( int timeout, void* cookie );
+	void local_name( const char*, int timeout, void* cookie );
+
+	void get_class( int timeout, void* cookie );
+	void set_class( u32 cls, int timeout, void* cookie );
+
+	void get_voice_setting( int timeout, void* cookie );
+	void set_voice_setting( u16 vs, int timeout, void* cookie );
 
 /*	device operations
 */
