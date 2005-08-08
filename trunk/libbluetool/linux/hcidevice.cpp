@@ -571,6 +571,54 @@ void LocalDevice::set_voice_setting( u16 vs, int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
+void LocalDevice::get_version( int timeout, void* cookie )
+{
+	read_local_version_rp* rp = new read_local_version_rp;
+	
+	Request* req = new Request;
+	req->hr.ogf    = OGF_INFO_PARAM;
+	req->hr.ocf    = OCF_READ_LOCAL_VERSION;
+	req->hr.rparam = rp;
+	req->hr.rlen   = READ_LOCAL_VERSION_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
+void LocalDevice::get_features( int timeout, void* cookie )
+{
+	read_local_features_rp* rp = new read_local_features_rp;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_INFO_PARAM;
+	req->hr.ocf    = OCF_READ_LOCAL_FEATURES;
+	req->hr.rparam = rp;
+	req->hr.rlen   = READ_LOCAL_FEATURES_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
+void LocalDevice::get_addr( int timeout, void* cookie )
+{
+	read_bd_addr_rp* rp = new read_bd_addr_rp;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_INFO_PARAM;
+	req->hr.ocf    = OCF_READ_BD_ADDR;
+	req->hr.rparam = &rp;
+	req->hr.rlen   = READ_BD_ADDR_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+}
+
 /*	device operations
 */
 
