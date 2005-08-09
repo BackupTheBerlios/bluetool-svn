@@ -70,19 +70,25 @@ public:
 	void iscan_enable( bool );
 	bool iscan_enable();
 
-	void local_name( int timeout, void* cookie );
-	void local_name( const char*, int timeout, void* cookie );
+	void local_name( void* cookie, int timeout );
+	void local_name( const char*, void* cookie, int timeout );
 
-	void get_class( int timeout, void* cookie );
-	void set_class( u32 cls, int timeout, void* cookie );
+	void get_class( void* cookie, int timeout );
+	void set_class( u32 cls, void* cookie, int timeout );
 
-	void get_voice_setting( int timeout, void* cookie );
-	void set_voice_setting( u16 vs, int timeout, void* cookie );
+	void get_voice_setting( void* cookie, int timeout );
+	void set_voice_setting( u16 vs, void* cookie, int timeout );
+
+	void get_version( void* cookie, int timeout );
+
+	void get_features( void* cookie, int timeout );
+
+	void get_addr( void* cookie, int timeout );
 
 /*	device operations
 */
 	void start_inquiry( u8* lap, u32 flags, void* cookie );
-	void cancel_inquiry();
+	void cancel_inquiry( void* cookie );
 public:
 	
 	Event	on_event;

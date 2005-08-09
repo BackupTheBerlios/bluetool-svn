@@ -1,6 +1,0 @@
-hciexception.o: hciexception.cpp ../hciexception.h ../../common/types.h
-eventloop.o: ../../common/eventloop.cpp ../../common/debug.h \
-  ../../common/eventloop.h ../../common/timeout.h \
-  ../../common/fdnotifier.h
-fdnotifier.o: ../../common/fdnotifier.cpp ../../common/fdnotifier.h
-timeout.o: ../../common/timeout.cpp ../../common/timeout.h

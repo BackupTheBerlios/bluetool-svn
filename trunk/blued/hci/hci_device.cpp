@@ -93,17 +93,19 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	else
 	if( property == "local_name" )
 	{
-		_device.local_name( 20000, reply );
+		_device.local_name(reply, HCI_TIMEOUT);
 	}
 	
 	else
 	if( property == "device_class" )
 	{
+		_device.get_class(reply, HCI_TIMEOUT);
 	}
 	
 	else
 	if( property == "voice_setting" )
 	{
+		_device.get_voice_setting(reply, HCI_TIMEOUT);
 	}
 	
 	else
@@ -149,11 +151,13 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	else
 	if( property == "features" )
 	{
+		_device.get_features(reply,HCI_TIMEOUT);
 	}
 	
 	else
 	if( property == "version_info" )
 	{
+		_device.get_version(reply,HCI_TIMEOUT);
 	}
 	
 	else
@@ -167,7 +171,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 		//send ok reply
 		//wr.append_string( _device.local_name() );
 		//reply.terminate();
-		conn().send(*reply);
+		//conn().send(*reply);
 	}
 	catch( Hci::Exception& e )
 	{
@@ -247,7 +251,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	if( property == "local_name" )
 	{
 		const char* name = i.get_string();
-		_device.local_name(name, 1000, reply);
+		_device.local_name(name, reply, HCI_TIMEOUT);
 	}
 	
 	else
@@ -321,7 +325,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	
 		
 		//everything went fine, reply
-		conn().send(*reply);
+		//conn().send(*reply);
 	
 	}
 	catch( Hci::Exception& e )
@@ -361,15 +365,14 @@ void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool ti
 	}
 
 	conn().send(*reply);
-
 	delete reply;
 }
 
-void HciDevice::handle_command_status( const Hci::EventPacket& evt, DBus::ReturnMessage* rpl )
+void HciDevice::handle_command_status( const Hci::EventPacket& evt, DBus::ReturnMessage* reply )
 {
 }
 
-void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::ReturnMessage* rpl )
+void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::ReturnMessage* reply )
 {
 	switch( evt.ogf )
 	{
@@ -398,8 +401,11 @@ void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::Retu
 				case OCF_READ_LOCAL_NAME:
 				{
 					read_local_name_rp* r = (read_local_name_rp*)evt.edata;
-					blue_dbg("local name request returned '%s'",r->name);
-					
+					const char* local_name = (char*)r->name;
+
+					blue_dbg("local name request returned '%s'",local_name);
+
+					reply->append(DBUS_TYPE_STRING,&local_name,DBUS_TYPE_INVALID);
 					break;
 				}
 			}

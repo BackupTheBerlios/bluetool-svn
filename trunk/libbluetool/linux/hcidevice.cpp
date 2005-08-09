@@ -84,12 +84,16 @@ void LocalDevice::Private::open( int dev_id )
 	f.set_type(HCI_EVENT_PKT);
 	f.set_event(EVT_CMD_STATUS);
 	f.set_event(EVT_CMD_COMPLETE);
+	f.clear_opcode();
 
-	dd.set_filter(f);
+	if(!dd.set_filter(f))
+		throw Exception();
 }
 
 void LocalDevice::Private::post_req( Request* req )
 {
+	if(!req->hr.event) req->hr.event = EVT_CMD_COMPLETE;
+
 	req->type = HCI_COMMAND_PKT;
 	req->ch.opcode = htobs(cmd_opcode_pack( req->hr.ogf, req->hr.ocf ));
 	req->ch.plen = req->hr.clen;
@@ -121,8 +125,7 @@ void LocalDevice::Private::req_timedout( Timeout& t )
 	Request* r = static_cast<Request*>(t.data());
 	r->status = Request::TIMEDOUT;
 	r->to.stop();
-	fire_event(r);
-	//notifier.flags( notifier.flags() | POLLOUT );	//force dispatch queue flush
+	fire_event(r); //todo: fails if timeout occurs in dispatch queue
 }
 
 void LocalDevice::Private::read_ready( FdNotifier& fn )
@@ -175,8 +178,6 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 				if (cc->opcode != pr->ch.opcode)
 					break;
 
-				pr->hr.event = EVT_CMD_COMPLETE; //here or post_req() ?
-
 				ptr += EVT_CMD_COMPLETE_SIZE;
 				len -= EVT_CMD_COMPLETE_SIZE;
 
@@ -226,13 +227,14 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 			}
 			case Request::QUEUED:
 			{
-				if(	pr->hr.event == EVT_CMD_STATUS || 
-					pr->hr.event == EVT_CMD_COMPLETE &&
-					of.opcode() ||
-					of.test_event(pr->hr.event)
-				)
+				if( pr->hr.event == EVT_CMD_STATUS || pr->hr.event == EVT_CMD_COMPLETE )
+				{
+					if(of.opcode()) break;
+				}
+				else if(of.test_event(pr->hr.event))
+				{
 					break;
-
+				}
 				pr->status = Request::WRITING;
 				goto _write;
 			}
@@ -468,7 +470,7 @@ bool LocalDevice::iscan_enable()
 	return hci_test_bit(HCI_ISCAN, &di.flags);
 }
 
-void LocalDevice::local_name( int timeout, void* cookie )
+void LocalDevice::local_name( void* cookie, int timeout )
 {
 	read_local_name_rp* rp = new read_local_name_rp;
 
@@ -484,7 +486,7 @@ void LocalDevice::local_name( int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::local_name( const char* name, int timeout, void* cookie )
+void LocalDevice::local_name( const char* name, void* cookie, int timeout )
 {
 	change_local_name_cp* cp = new change_local_name_cp;
 
@@ -503,7 +505,7 @@ void LocalDevice::local_name( const char* name, int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_class( int timeout, void* cookie )
+void LocalDevice::get_class( void* cookie, int timeout )
 {
 	read_class_of_dev_rp* rp = new read_class_of_dev_rp;
 
@@ -519,7 +521,7 @@ void LocalDevice::get_class( int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::set_class( u32 cls, int timeout, void* cookie )
+void LocalDevice::set_class( u32 cls, void* cookie, int timeout )
 {
 	write_class_of_dev_cp* cp = new write_class_of_dev_cp;
 	cp->dev_class[0] = cls & 0xff;
@@ -538,7 +540,7 @@ void LocalDevice::set_class( u32 cls, int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_voice_setting( int timeout, void* cookie )
+void LocalDevice::get_voice_setting( void* cookie, int timeout )
 {
 	read_voice_setting_rp* rp = new read_voice_setting_rp;
 
@@ -554,7 +556,7 @@ void LocalDevice::get_voice_setting( int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::set_voice_setting( u16 vs, int timeout, void* cookie )
+void LocalDevice::set_voice_setting( u16 vs, void* cookie, int timeout )
 {
 	write_voice_setting_cp* cp = new write_voice_setting_cp;
 	cp->voice_setting = vs;
@@ -571,7 +573,7 @@ void LocalDevice::set_voice_setting( u16 vs, int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_version( int timeout, void* cookie )
+void LocalDevice::get_version( void* cookie, int timeout )
 {
 	read_local_version_rp* rp = new read_local_version_rp;
 	
@@ -587,7 +589,7 @@ void LocalDevice::get_version( int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_features( int timeout, void* cookie )
+void LocalDevice::get_features( void* cookie, int timeout )
 {
 	read_local_features_rp* rp = new read_local_features_rp;
 
@@ -603,14 +605,14 @@ void LocalDevice::get_features( int timeout, void* cookie )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_addr( int timeout, void* cookie )
+void LocalDevice::get_addr( void* cookie, int timeout )
 {
 	read_bd_addr_rp* rp = new read_bd_addr_rp;
 
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_BD_ADDR;
-	req->hr.rparam = &rp;
+	req->hr.rparam = rp;
 	req->hr.rlen   = READ_BD_ADDR_RP_SIZE;
 
 	req->to.interval(timeout);

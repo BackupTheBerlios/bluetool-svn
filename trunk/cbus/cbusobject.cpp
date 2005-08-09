@@ -81,7 +81,7 @@ DBusHandlerResult LocalObject::message_function_stub( DBusConnection*, DBusMessa
 
 	if( o )
 	{
-		cbus_dbg("got message from %s to %s (in %s)", msg.sender(), msg.destination(), o->name().c_str());
+		cbus_dbg("got message #%d from %s to %s (in %s)", msg.serial(), msg.sender(), msg.destination(), o->name().c_str());
 
 		return o->handle_message(msg) ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
@@ -94,7 +94,7 @@ bool LocalObject::handle_message( const Message& msg )
 	{
 		case DBUS_MESSAGE_TYPE_METHOD_CALL:
 		{
-			const CallMessage& cmsg = static_cast<const CallMessage&>(msg);
+			const CallMessage& cmsg = reinterpret_cast<const CallMessage&>(msg);
 			const char* interface	= cmsg.interface();
 		
 			InterfaceTable::const_iterator ii = _interfaces.find(interface);

@@ -8,9 +8,9 @@
 #include "../../libbluetool/hcidevice.h"
 #include "../../libbluetool/hcievent.h"
 
-#define DBUS_HCI_SERVICE	"org.bluetool.hci"
-#define DBUS_HCIDEV_IFACE	"org.bluetool.hci.device"
-#define DBUS_HCIDEV_PATH	"/org/bluetool/hci/"//+ hciX
+#include "../dbus_names.h"
+
+#define	HCI_TIMEOUT 50000
 
 class HciDevice;
 typedef std::map<std::string, HciDevice*>	HciDevicePTable;

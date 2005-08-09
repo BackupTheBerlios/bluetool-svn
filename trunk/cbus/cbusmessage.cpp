@@ -6,12 +6,12 @@ namespace DBus
 {
 
 Message::Message()
-{//todo
-}
+{}
 
 Message::Message( DBusMessage* m )
 {
-	_message = dbus_message_copy(m);
+	_message = m;
+	ref();
 }
 
 Message::Message( const Message& m )

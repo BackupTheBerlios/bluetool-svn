@@ -1,6 +1,7 @@
 #ifndef __HCI_DEVICE_P_H
 #define __HCI_DEVICE_P_H
 
+#include "../hcidebug.h"
 #include "../hcidevice.h"
 
 #include <cstring>

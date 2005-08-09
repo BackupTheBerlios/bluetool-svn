@@ -4,12 +4,10 @@
 #include "../../cbus/cbus.h"
 #include "../../common/eventloop.h"
 
+#include "../dbus_names.h"
+
 #include "hci_tracker.h"
 #include "hci_device.h"
-
-#define DBUS_HCI_SERVICE	"org.bluetool.hci"
-#define	DBUS_HCIMAN_IFACE	"org.bluetool.hci.manager"
-#define DBUS_HCIMAN_PATH	"/org/bluetool/hci/manager"
 
 /*
 	basically, that's what we see from the system bus:

@@ -6,8 +6,7 @@
 #include "../../cbus/cbus.h"
 #include "../../libbluetool/sdpsession.h"
 
-#define SDP_CLIENT_PATH		"/org/bluetool/sdp/client"
-#define SDP_CLIENT_IFACE	"org.bluetool.sdp.client"
+#include "../dbus_names.h"
 
 class SdpClient : public DBus::LocalInterface, public DBus::LocalObject
 {

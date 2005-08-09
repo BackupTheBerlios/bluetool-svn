@@ -133,7 +133,9 @@ public:
 
 	inline int serial() const;
 
-	inline bool serial( int s );
+	inline int reply_serial() const;
+
+	inline bool reply_serial( int );
 
 	inline const char* sender() const;
 
@@ -165,7 +167,7 @@ protected:
 
 	inline void unref();
 
-public://testing
+protected:
 	DBusMessage *_message;
 
 /*	classes who need to read `_message` directly
@@ -186,9 +188,13 @@ int Message::type() const
 }
 int Message::serial() const
 {
+	return dbus_message_get_serial(_message);
+}
+int Message::reply_serial() const
+{
 	return dbus_message_get_reply_serial(_message);
 }
-bool Message::serial( int s )
+bool Message::reply_serial( int s )
 {
 	return dbus_message_set_reply_serial(_message,s);
 }
@@ -407,7 +413,6 @@ public:
 
 /*
 */
-
 const char* ReturnMessage::signature() const
 {
 	return dbus_message_get_signature(_message);
