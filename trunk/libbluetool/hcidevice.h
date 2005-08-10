@@ -109,7 +109,16 @@ public:
 
 	virtual ~RemoteDevice();
 
-	inline const BdAddr& addr();
+	inline const BdAddr& addr() const;
+
+	inline u8 page_scan_repeat_mode() const;
+	inline void page_scan_repeat_mode( u8 );
+
+	inline u8 page_scan_mode() const;
+	inline void page_scan_mode( u8 );
+
+	inline u16 clock_offset() const;
+	inline void clock_offset( u8 );
 
 public:
 
@@ -129,9 +138,37 @@ private:
 
 };
 
-const BdAddr& RemoteDevice::addr()
+const BdAddr& RemoteDevice::addr() const
 {
 	return _addr;
+}
+
+u8 RemoteDevice::page_scan_repeat_mode() const
+{
+	return _pscan_rpt_mode;
+}
+
+void RemoteDevice::page_scan_repeat_mode( u8 prm )
+{
+	_pscan_rpt_mode = prm;
+}
+
+u8 RemoteDevice::page_scan_mode() const
+{
+	return _pscan_mode;
+}
+void RemoteDevice::page_scan_mode( u8 pm )
+{
+	_pscan_mode = pm;
+}
+
+u16 RemoteDevice::clock_offset() const
+{
+	return _clk_offset;
+}
+void RemoteDevice::clock_offset( u8 co )
+{
+	_clk_offset = co;
 }
 
 }//namespace Hci

@@ -338,6 +338,39 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 	_device.start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
 }
 
+void HciDevice::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+{
+	const std::string straddr = addr.to_string();
+
+	HciRemotePTable::iterator i = _inquiry_cache.find(straddr);
+	if( i == _inquiry_cache.end() )
+	{
+		/* create new entry
+		*/
+		_inquiry_cache[straddr] = new HciRemote(*this, addr, pscan_rpt_mode, pscan_mode, clk_offset);
+	}
+	else
+	{
+		/* update cache entry
+		*/
+		i->second->update(pscan_rpt_mode, pscan_mode, clk_offset);
+	}
+}
+
+void HciDevice::finalize_cache()
+{
+	HciRemotePTable::iterator ri = _inquiry_cache.begin();
+	while( ri != _inquiry_cache.end() )
+	{
+		if(ri->second->last_updated() < _time_last_inquiry)
+		{
+			delete ri->second;
+			_inquiry_cache.erase(ri);
+		}
+		++ri;
+	}
+}
+
 void HciDevice::clear_cache()
 {
 	HciRemotePTable::iterator ri = _inquiry_cache.begin();
@@ -404,6 +437,14 @@ void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool ti
 			}
 			case EVT_INQUIRY_COMPLETE:
 			{
+				timeval now;
+				gettimeofday(&now, NULL);
+
+				_time_last_inquiry = now.tv_sec*1000 + now.tv_usec/1000.0;
+
+				finalize_cache();
+
+				break;
 			}
 		}
 	}
@@ -648,6 +689,23 @@ HciRemote::HciRemote( HciDevice& parent, const BdAddr& addr, u8 pscan_rpt_mode, 
 {
 	register_method( HciRemote, GetProperty );
 	register_method( HciRemote, SetProperty );
+}
+
+void HciRemote::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+{
+	_device.page_scan_repeat_mode(pscan_rpt_mode);
+	_device.page_scan_mode(pscan_mode);
+	_device.clock_offset(clk_offset);
+
+	timeval now;
+	gettimeofday(&now, NULL);
+
+	_time_last_update = now.tv_sec*1000 + now.tv_usec/1000.0;	
+}
+
+double HciRemote::last_updated() const
+{
+	return _time_last_update;
 }
 
 void HciRemote::GetProperty( const DBus::CallMessage& msg )

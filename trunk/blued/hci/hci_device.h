@@ -3,12 +3,15 @@
 
 #include <map>
 #include <string>
+#include <algorithm>
+
+#include <sys/time.h>
+
+#include "../btool_common.h"
 
 #include "../../cbus/cbus.h"
 #include "../../libbluetool/hcidevice.h"
 #include "../../libbluetool/hcievent.h"
-
-#include "../btool_common.h"
 
 #define	HCI_TIMEOUT 120000
 
@@ -54,14 +57,14 @@ private:
 	void handle_command_complete( const Hci::EventPacket&, DBus::ReturnMessage* rpl );
 
 	void clear_cache();
-	void update_cache();
+	void update_cache( const BdAddr&, u8, u8, u16 );
+	void finalize_cache();
 
 private:
 	Hci::LocalDevice	_device;
 	HciRemotePTable		_inquiry_cache;
 
-	u32			_inquiry_start_time;
-	u32			_inquiry_length;
+	double			_time_last_inquiry;
 
 friend class HciRemote;
 friend class HciConnection;
@@ -83,9 +86,16 @@ public:
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
+	/*	class methods
+	*/
+	void update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset );
+	double last_updated() const;
+
 private:
 	Hci::RemoteDevice	_device;
 	HciConnPTable		_connections;
+
+	double			_time_last_update;
 };
 
 /*	HCI Connection
