@@ -45,7 +45,7 @@ public:
 	
 	virtual ~Interface();
 
-	inline const std::string& name();
+	inline const std::string& iname() const;
 
 	virtual bool invoke_method( const CallMessage& );
 
@@ -68,11 +68,10 @@ private:
 namespace DBus
 {
 
-
 /*
 */
 
-const std::string& Interface::name()
+const std::string& Interface::iname() const
 {
 	return _name;
 }

@@ -119,7 +119,6 @@ int Session::Private::save_and_cstate()
 	{
 		throw Error("pdu too large");
 	}
-	//ibuf....
 	ibuf.insert(ibuf.end(), tdata, tdata+param_len);
 
 	/* save continuation state

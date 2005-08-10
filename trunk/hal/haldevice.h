@@ -12,7 +12,7 @@
 
 class HalDevice;
 
-typedef vector<HalDevice*> HalDevices;
+typedef std::vector<HalDevice*> HalDevices;
 
 class HalDevice : public DBus::RemoteInterface, public DBus::RemoteObject
 {

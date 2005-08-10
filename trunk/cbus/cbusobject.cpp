@@ -35,10 +35,10 @@ DBusObjectPathVTable LocalObject::_vtable =
 
 void LocalObject::register_obj()
 {
-	cbus_dbg("registering local object %s", name().c_str());
-	if(!dbus_connection_register_object_path(conn()._connection, name().c_str(), &_vtable, this))
+	cbus_dbg("registering local object %s", oname().c_str());
+	if(!dbus_connection_register_object_path(conn()._connection, oname().c_str(), &_vtable, this))
 	{
-	cbus_dbg("error registering object path %s", name().c_str());		
+		cbus_dbg("error registering object path %s", oname().c_str());		
  		//throw Error(NULL,"Unable to register object");
 	}
 	else
@@ -55,8 +55,8 @@ void LocalObject::register_obj()
 
 void LocalObject::unregister_obj()
 {
-	cbus_dbg("unregistering local object %s", name().c_str());
-	dbus_connection_unregister_object_path(conn()._connection, name().c_str());
+	cbus_dbg("unregistering local object %s", oname().c_str());
+	dbus_connection_unregister_object_path(conn()._connection, oname().c_str());
 
 	InterfaceTable::const_iterator ii = _interfaces.begin();
 	while( ii != _interfaces.end() )
@@ -81,7 +81,7 @@ DBusHandlerResult LocalObject::message_function_stub( DBusConnection*, DBusMessa
 
 	if( o )
 	{
-		cbus_dbg("got message #%d from %s to %s (in %s)", msg.serial(), msg.sender(), msg.destination(), o->name().c_str());
+		cbus_dbg("got message #%d from %s to %s (in %s)", msg.serial(), msg.sender(), msg.destination(), o->oname().c_str());
 
 		return o->handle_message(msg) ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
@@ -131,7 +131,7 @@ RemoteObject::~RemoteObject()
 
 void RemoteObject::register_obj()
 {
-	cbus_dbg("registering remote object %s", name().c_str());
+	cbus_dbg("registering remote object %s", oname().c_str());
 	_receiver.filtered.connect( sigc::mem_fun( this, &RemoteObject::handle_message ) );
 	
 	conn().add_filter(_receiver);
@@ -150,7 +150,7 @@ void RemoteObject::register_obj()
 
 void RemoteObject::unregister_obj()
 {
-	cbus_dbg("unregistering remote object %s", name().c_str());
+	cbus_dbg("unregistering remote object %s", oname().c_str());
 	InterfaceTable::const_iterator ii = _interfaces.begin();
 	while( ii != _interfaces.end() )
 	{

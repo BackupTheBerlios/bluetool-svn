@@ -1,4 +1,5 @@
 #include "cbusdebug.h"
+#include "cbusmessage.h"
 #include "cbuserror.h"
 
 namespace DBus

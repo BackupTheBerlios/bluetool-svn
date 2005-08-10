@@ -11,7 +11,7 @@ all:		$(RULEFILE) $(OBJS)
 clean:
 		rm -v $(OBJS) ;	rm -v $(RULEFILE)
 
-blued:	$(OBJS)
+blued:		$(OBJS)
 		g++ $(OBJS) $(LDFLAGS) -o blued
 
 #

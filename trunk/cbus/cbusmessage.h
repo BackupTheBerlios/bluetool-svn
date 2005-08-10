@@ -5,6 +5,8 @@
 #include <string>
 #include <map>
 
+#include "../common/types.h"
+
 namespace DBus
 {
 class Message;
@@ -49,6 +51,10 @@ public:
 
 	inline bool get_bool();
 
+	inline bool append_byte( u8 byte );
+
+	inline u8   get_byte();
+
 	inline MessageIter recurse();
 
 private:
@@ -91,6 +97,9 @@ bool MessageIter::append_string( const char* string )
 
 const char* MessageIter::get_string()
 {
+	if(type() != DBUS_TYPE_STRING)
+		throw Error(DBUS_ERROR_INVALID_ARGS,"String value expected");
+
  	char* ret;
 	dbus_message_iter_get_basic(&_iter, &ret);
  	return ret;
@@ -103,7 +112,25 @@ bool MessageIter::append_bool( bool b )
 
 bool MessageIter::get_bool()	
 {	
+	if(type() != DBUS_TYPE_BOOLEAN)
+		throw Error(DBUS_ERROR_INVALID_ARGS,"Boolean value expected");
+
  	bool ret;
+	dbus_message_iter_get_basic(&_iter, &ret);
+ 	return ret;
+}
+
+bool MessageIter::append_byte( u8 byte )
+{
+	return dbus_message_iter_append_basic(&_iter, DBUS_TYPE_BYTE, &byte);
+}
+
+u8 MessageIter::get_byte()
+{	
+	if(type() != DBUS_TYPE_BYTE)
+		throw Error(DBUS_ERROR_INVALID_ARGS,"Byte value expected");
+
+ 	u8 ret;
 	dbus_message_iter_get_basic(&_iter, &ret);
  	return ret;
 }

@@ -66,7 +66,11 @@ void Connection::init()
 	const char* service = this->unique_name();
 	if(service)
 	{
-		string match = string("destination='") + string(service) + string("'");
+		std::string match = 
+			  std::string("destination='")
+			+ std::string(service)
+			+ std::string("'");
+
 		this->add_match(match.c_str());
 	}
 
@@ -163,7 +167,7 @@ void Connection::request_name( const char* name, int flags )
 	if(name)
 	{
 		this->_service_name = name;
-		string match = "destination='" + _service_name + "'";
+		std::string match = "destination='" + _service_name + "'";
 		this->add_match(match.c_str());
 	}
 
@@ -225,7 +229,7 @@ bool Connection::register_object( RemoteObject* o )
 
 	if(add_filter( o->_receiver ))
 	{
-//		string match = "interface='" + o->name() + "'";
+//		std::string match = "interface='" + o->name() + "'";
 //		add_match(match.c_str());
 		_registered_objects.push_back(o);
 		return true;
@@ -247,7 +251,7 @@ bool Connection::unregister_object( RemoteObject* o )
 	//	remove_match("type='signal'");
 
 	
-	//	string match = "source='" + o->name() + "'";
+	//	std::string match = "source='" + o->name() + "'";
 	//	remove_match(match.c_str());
 
 		o->_base_service = NULL;

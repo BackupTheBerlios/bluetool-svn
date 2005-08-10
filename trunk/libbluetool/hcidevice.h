@@ -12,10 +12,10 @@
 namespace Hci
 {
 	class LocalDevice;
-	typedef std::list<LocalDevice> LocalDevices;
+	typedef std::list<LocalDevice*> LocalDevPList;
 
 	class RemoteDevice;
-	typedef std::list<RemoteDevice> RemoteDevices;
+	typedef std::list<RemoteDevice*> RemoteDevPList;
 }
 
 #include "bdaddr.h"
@@ -33,13 +33,13 @@ public:
 
 /*	device enumeration
 */	
-	static LocalDevices enumerate();
+	//static LocalDevices enumerate();
 
 /*	device control
 */	
-	static void up( int dev_id );
-	static void down( int dev_id );
-	static void reset( int dev_id );
+	static void up( const char* name );
+	static void down( const char* name );
+	static void reset( const char* name );
 
 public:
 
@@ -55,23 +55,17 @@ public:
 
 /*	device properties
 */
-	void auth_enable( bool );
-	bool auth_enable();
+	void get_auth_enable( void* cookie, int timeout );
+	void set_auth_enable( u8, void* cookie, int timeout );
 
-	void encrypt_enable( bool );
-	bool encrypt_enable();
+	void get_encrypt_mode( void* cookie, int timeout );
+	void set_encrypt_mode( u8, void* cookie, int timeout );
 
-	void secman_enable( bool );
-	bool secman_enable();
+	void get_scan_type( void* cookie, int timeout );
+	void set_scan_type( u8, void* cookie, int timeout );
 
-	void pscan_enable( bool );
-	bool pscan_enable();
-
-	void iscan_enable( bool );
-	bool iscan_enable();
-
-	void local_name( void* cookie, int timeout );
-	void local_name( const char*, void* cookie, int timeout );
+	void set_local_name( const char*, void* cookie, int timeout );
+	void get_local_name( void* cookie, int timeout );
 
 	void get_class( void* cookie, int timeout );
 	void set_class( u32 cls, void* cookie, int timeout );

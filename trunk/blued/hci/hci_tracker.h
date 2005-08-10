@@ -10,15 +10,15 @@
 
 #include "../../libbluetool/hcidevice.h"
 
-class HciListener;
+class HciTracker;
+class HciManager;
 
 #include "hci_device.h"
 
 class HciTracker : public HalManager
 {
 public:
-	HciTracker( /*HciDevicePTable&*/ );
-
+	HciTracker();
 	
 	~HciTracker();
 
@@ -30,10 +30,9 @@ private:
 
 private:
 
-//	void update_table();
-private:
-
 	HciDevicePTable	_devices;
+
+friend class HciManager;
 };
 
 #endif//__BTOOL_HCI_TRACKER_H

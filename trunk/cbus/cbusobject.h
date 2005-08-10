@@ -35,7 +35,7 @@ public:
 
 	virtual ~Object();
 
-	inline const std::string& name();
+	inline const std::string& oname() const;
 
 protected:
 
@@ -65,7 +65,7 @@ Connection& Object::conn()
 }
 
 
-const std::string& Object::name()
+const std::string& Object::oname() const
 {
 	return _name;
 }

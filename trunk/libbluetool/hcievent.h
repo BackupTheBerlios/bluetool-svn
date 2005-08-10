@@ -25,6 +25,7 @@ typedef sigc::signal<void, EventPacket&, void*, bool> Event;
 
 struct EventPacket
 {
+u16	status;
 u8	code;
 u8	ogf;
 u8	ocf;

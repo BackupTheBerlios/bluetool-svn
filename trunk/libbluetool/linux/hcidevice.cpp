@@ -2,7 +2,7 @@
 
 namespace Hci
 {
-
+#if 0
 LocalDevices LocalDevice::enumerate()
 {
 	LocalDevices ret;
@@ -25,28 +25,29 @@ LocalDevices LocalDevice::enumerate()
 	}
 	return ret;
 }
+#endif
 
 /*	device control
 */
 
-void LocalDevice::up( int dev_id )
+void LocalDevice::up( const char* name )
 {
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVUP, dev_id) < 0 && errno != EALREADY )
+	if( ioctl(sock.handle(), HCIDEVUP, hci_devid(name)) < 0 && errno != EALREADY )
 		throw Exception();
 }
 
-void LocalDevice::down( int dev_id )
+void LocalDevice::down( const char* name )
 {
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVDOWN, dev_id) < 0 )
+	if( ioctl(sock.handle(), HCIDEVDOWN, hci_devid(name)) < 0 )
 		throw Exception();
 }
 
-void LocalDevice::reset( int dev_id )
+void LocalDevice::reset( const char* name )
 {
-	up(dev_id);
-	down(dev_id);
+	up(name);
+	down(name);
 }
 
 /*
@@ -166,8 +167,8 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 
 				if (cs->status)
 				{
-					errno = EIO;
-					throw Exception(); //hmm, not a good idea
+					pr->hr.event = EVT_CMD_STATUS;
+					fire_event(pr);
 				}
 				break;
 
@@ -223,7 +224,7 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 		{
 			case Request::WRITING:
 			{
-				goto _write;
+				goto _writev;
 			}
 			case Request::QUEUED:
 			{
@@ -239,7 +240,7 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 				goto _write;
 			}
 			case Request::TIMEDOUT:
-			{	//timeouts are supposed to be in the other queue
+			{	//move! timeouts are supposed to be in the other queue
 				pr->status = Request::WAITING;
 				dispatchq.erase( pr->iter );
 				waitq.push_front(pr);
@@ -266,7 +267,7 @@ _write:	if(	pr->hr.event == EVT_CMD_STATUS ||
 
 	dd.set_filter(of);
 
-	if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
+_writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 	{
 		if (errno == EAGAIN || errno == EINTR)
 			return;
@@ -320,19 +321,11 @@ cleanreq:
 /*
 */
 
-static int __dev_id( const char* name )
-{
-	if( !strncmp( name, "hci", 3 ) )
-		return atoi( name+3 );
-	else
-		return -1;
-}
-
 LocalDevice::LocalDevice( const char* dev_name )
 {
 	pvt = new Private;
 	pvt->parent = this;
-	pvt->open(__dev_id(dev_name));
+	pvt->open(hci_devid(dev_name));
 }
 
 LocalDevice::LocalDevice( int dev_id )
@@ -368,54 +361,81 @@ int __hci_devinfo( int dd, int id, hci_dev_info* di )
 
 /*	device properties
 */
-void LocalDevice::auth_enable( bool enable )
+void LocalDevice::set_auth_enable( u8 enable, void* cookie, int timeout )
 {
-	struct hci_dev_req dr;
+/*	struct hci_dev_req dr;
 
 	dr.dev_id = id();
 	dr.dev_opt = enable ? AUTH_ENABLED : AUTH_DISABLED;
 
 	if( ioctl(pvt->dd.handle(), HCISETAUTH, (ulong)&dr) < 0 )	
 		throw Exception();
+*/
 }
-bool LocalDevice::auth_enable()
+void LocalDevice::get_auth_enable( void* cookie, int timeout )
 {
-	hci_dev_info di;
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_AUTH_ENABLE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = 1;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+
+/*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_AUTH, &di.flags);
+*/
 }
 
-void LocalDevice::encrypt_enable( bool encrypt )
+void LocalDevice::set_encrypt_mode( u8 encrypt, void* cookie, int timeout )
 {
-	struct hci_dev_req dr;
+/*	struct hci_dev_req dr;
 
 	dr.dev_id = id();
 	dr.dev_opt = encrypt ? ENCRYPT_P2P : ENCRYPT_DISABLED;
 
 	if( ioctl(pvt->dd.handle(), HCISETENCRYPT, (ulong)&dr) < 0 )
 		throw Exception();
+*/
 }
-bool LocalDevice::encrypt_enable()
+void LocalDevice::get_encrypt_mode( void* cookie, int timeout )
 {
-	hci_dev_info di;
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_ENCRYPT_MODE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = 1;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+
+/*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_ENCRYPT, &di.flags);
+*/
 }
 
-void LocalDevice::secman_enable( bool enable )
+#if 0
+void LocalDevice::set_secman_enable( bool enable )
 {
 	int sm = enable ? 1 : 0;
 
 	if( ioctl(pvt->dd.handle(), HCISETSECMGR, sm) < 0 )
 		throw Exception();
 }
-bool LocalDevice::secman_enable()
+bool LocalDevice::get_secman_enable()
 {
 	hci_dev_info di;
 
@@ -424,10 +444,51 @@ bool LocalDevice::secman_enable()
 
 	return hci_test_bit(HCI_SECMGR, &di.flags);
 }
+#endif
 
-void LocalDevice::pscan_enable( bool enable )
+void LocalDevice::get_scan_type( void* cookie, int timeout )
 {
-	struct hci_dev_req dr;
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_READ_INQUIRY_SCAN_TYPE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = READ_INQUIRY_SCAN_TYPE_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+
+/*	hci_dev_info di;
+
+	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
+		throw Exception();
+
+	return hci_test_bit(HCI_PSCAN, &di.flags);
+*/
+}
+
+void LocalDevice::set_scan_type( u8 type, void* cookie, int timeout )
+{
+	write_inquiry_scan_type_cp* cp = new write_inquiry_scan_type_cp;
+
+	memset(cp, 0, sizeof(write_inquiry_scan_type_cp));
+	cp->type = type;
+
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_WRITE_INQUIRY_SCAN_TYPE;
+	req->hr.cparam = cp;
+	req->hr.clen   = WRITE_INQUIRY_SCAN_TYPE_CP_SIZE;;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = WRITE_INQUIRY_SCAN_TYPE_RP_SIZE;
+
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
+
+/*	struct hci_dev_req dr;
 
 	dr.dev_id  = id();
 	dr.dev_opt = iscan_enable() 
@@ -436,21 +497,14 @@ void LocalDevice::pscan_enable( bool enable )
 
 	if( ioctl(pvt->dd.handle(), HCISETSCAN, (ulong)&dr) < 0 )
 		throw Exception();
-}
-bool LocalDevice::pscan_enable()
-{
-	hci_dev_info di;
-
-	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
-
-	return hci_test_bit(HCI_PSCAN, &di.flags);
+*/
 }
 
-void LocalDevice::iscan_enable( bool enable )
-{
-	struct hci_dev_req dr;
+#if 0
 
+void LocalDevice::set_iscan_enable( bool enable, void* cookie, int timeout )
+{
+/*	struct hci_dev_req dr;
 
 	dr.dev_id  = id();
 	dr.dev_opt = pscan_enable() 
@@ -459,25 +513,27 @@ void LocalDevice::iscan_enable( bool enable )
 
 	if( ioctl(pvt->dd.handle(), HCISETSCAN, (ulong)&dr) < 0 )
 		throw Exception();
+*/
 }
-bool LocalDevice::iscan_enable()
+bool LocalDevice::get_iscan_enable( void* cookie, int timeout )
 {
-	hci_dev_info di;
+/*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
 		throw Exception();
 
 	return hci_test_bit(HCI_ISCAN, &di.flags);
+*/
 }
 
-void LocalDevice::local_name( void* cookie, int timeout )
-{
-	read_local_name_rp* rp = new read_local_name_rp;
+#endif
 
+void LocalDevice::get_local_name( void* cookie, int timeout )
+{
 	Request* req = new Request;
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_LOCAL_NAME;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_NAME_RP_SIZE;
 
 	req->to.interval(timeout);
@@ -486,11 +542,11 @@ void LocalDevice::local_name( void* cookie, int timeout )
 	pvt->post_req(req);
 }
 
-void LocalDevice::local_name( const char* name, void* cookie, int timeout )
+void LocalDevice::set_local_name( const char* name, void* cookie, int timeout )
 {
 	change_local_name_cp* cp = new change_local_name_cp;
 
-	memset(cp, 0, sizeof(*cp));
+	memset(cp, 0, sizeof(change_local_name_cp));
 	strncpy((char*)cp->name, name, sizeof(cp->name));
 
 	Request* req = new Request;
@@ -507,12 +563,10 @@ void LocalDevice::local_name( const char* name, void* cookie, int timeout )
 
 void LocalDevice::get_class( void* cookie, int timeout )
 {
-	read_class_of_dev_rp* rp = new read_class_of_dev_rp;
-
 	Request* req = new Request;
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_CLASS_OF_DEV;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_CLASS_OF_DEV_RP_SIZE;
 
 	req->to.interval(timeout);
@@ -542,12 +596,10 @@ void LocalDevice::set_class( u32 cls, void* cookie, int timeout )
 
 void LocalDevice::get_voice_setting( void* cookie, int timeout )
 {
-	read_voice_setting_rp* rp = new read_voice_setting_rp;
-
 	Request* req = new Request;
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_VOICE_SETTING;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_VOICE_SETTING_RP_SIZE;
 
 	req->to.interval(timeout);
@@ -575,12 +627,10 @@ void LocalDevice::set_voice_setting( u16 vs, void* cookie, int timeout )
 
 void LocalDevice::get_version( void* cookie, int timeout )
 {
-	read_local_version_rp* rp = new read_local_version_rp;
-	
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_LOCAL_VERSION;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_VERSION_RP_SIZE;
 
 	req->to.interval(timeout);
@@ -591,12 +641,10 @@ void LocalDevice::get_version( void* cookie, int timeout )
 
 void LocalDevice::get_features( void* cookie, int timeout )
 {
-	read_local_features_rp* rp = new read_local_features_rp;
-
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_LOCAL_FEATURES;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_FEATURES_RP_SIZE;
 
 	req->to.interval(timeout);
@@ -607,12 +655,10 @@ void LocalDevice::get_features( void* cookie, int timeout )
 
 void LocalDevice::get_addr( void* cookie, int timeout )
 {
-	read_bd_addr_rp* rp = new read_bd_addr_rp;
-
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_BD_ADDR;
-	req->hr.rparam = rp;
+	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_BD_ADDR_RP_SIZE;
 
 	req->to.interval(timeout);

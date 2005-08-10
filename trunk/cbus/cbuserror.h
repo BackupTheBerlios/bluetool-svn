@@ -8,16 +8,13 @@
 namespace DBus
 {
 class Error;
+class Message;
 }
-
-#include "cbusmessage.h"
-
-using namespace std;
 
 namespace DBus
 {
 
-class Error : public exception
+class Error : public std::exception
 {
 public:
 	Error();

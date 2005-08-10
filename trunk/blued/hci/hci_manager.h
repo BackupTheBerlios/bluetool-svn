@@ -4,30 +4,10 @@
 #include "../../cbus/cbus.h"
 #include "../../common/eventloop.h"
 
-#include "../dbus_names.h"
+#include "../btool_common.h"
 
 #include "hci_tracker.h"
 #include "hci_device.h"
-
-/*
-	basically, that's what we see from the system bus:
-
-	org.bluetool.hci		the service containing all our bus objects
-
-	org.bluetool.hci.manager	the interface which specifies the behaviour of the HciManager,
-					this interface consists of
-
-	DeviceAdded			signal
-	DeviceRemoved			signal
-
-	EnumDevices			method
-
-	/org/bluetool/hci/manager	the actual object implementing the above interface
-
-	org.bluetool.hci.device		the interface representing a device
-
-	/org/bluetool/hci/hciX		(where X is a small integer) the object devices
-*/
 
 class HciManager : public DBus::LocalObject, public DBus::LocalInterface
 {
@@ -52,11 +32,10 @@ private:
 
 private:
 
-	HciDevice* get_device( int dev_id );
+	HciDevice* get_device( const char* name );
 
 private:
 	HciTracker _tracker;
-	//HciDevicePTable	_devices;
 };
 
 class HciService

@@ -27,9 +27,6 @@ public:
 
 	virtual void DeviceRemoved( const DBus::SignalMessage& )
 	{}
-
-//	void	NewCapability( const DBus::SignalMessage& );
-
 };
 
 #endif//__HAL_BT_LISTENER_H

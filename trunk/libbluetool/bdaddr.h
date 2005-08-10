@@ -17,7 +17,7 @@ public:
 	bool operator == (const BdAddr& ba) const;
 	ushort operator [] (uint i) const;
 
-	std::string to_string();
+	const std::string to_string() const;
 
 	inline u8* addr();
 
