@@ -9,6 +9,7 @@
 namespace DBus
 {
 class Filter;
+
 class Message;
 }
 
@@ -28,8 +29,7 @@ public:
 
 	Filtered	filtered;
 private:
-//	std::string	_rule;
-//	void*		_data;
+
 };
 
 typedef std::list<Filter> FilterList;

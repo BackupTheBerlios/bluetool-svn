@@ -1,7 +1,7 @@
 #ifndef __CBUS_SERVICE_H
 #define __CBUS_SERVICE_H
 
-/*	UPDATE: maybe we don't need this class
+/*	TODO: remove this file
 */
 
 #include <string>

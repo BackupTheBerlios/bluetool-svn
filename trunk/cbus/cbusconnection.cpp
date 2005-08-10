@@ -127,15 +127,7 @@ void Connection::remove_filter( Filter& f )
 
 bool Connection::send( const Message& msg, unsigned int* serial )
 {
-//	return dbus_connection_send(_connection, msg._message, serial);
-	if(dbus_connection_send(_connection, msg._message, serial))
-	{
-		//_dispatch_pending = true;
-		//do_dispatch();
-		//dbus_connection_flush(_connection);
-		return true;
-	}
-	return false;
+	return dbus_connection_send(_connection, msg._message, serial);
 }
 
 Message Connection::send_blocking( Message& msg, int timeout )
@@ -186,126 +178,6 @@ bool Connection::has_name( const char* name )
 	if(e) throw e;	//hmmm, do we need that ??
 	return b;
 }
-#if 0
-DBusObjectPathVTable Connection::_vtable =
-{	
-	unregister_function_stub,
-	message_function_stub,
-	NULL, NULL, NULL, NULL
-};
-
-bool Connection::register_object( LocalObject* o )
-{
-	cbus_dbg("%s: registering local object %s",unique_name(),o->name().c_str());
-
-	if(dbus_connection_register_object_path(_connection, o->name().c_str(), &_vtable, o))
-	{
-		_registered_objects.push_back(o);
-		return true;
-	}
-	else	return false;
-}
-
-bool Connection::unregister_object( LocalObject* o )
-{
-	cbus_dbg("%s: unregistering local object %s",unique_name(),o->name().c_str());
-
-	ObjectPList::iterator oi = std::find(
-		_registered_objects.begin(),
-		_registered_objects.end(),
-		o
-	);
-	if( oi != _registered_objects.end() && (*oi)->name() == o->name() )
-	{	
-		dbus_connection_unregister_object_path(_connection, o->name().c_str());
-		return true;
-	}
-	return false;
-}
-
-bool Connection::register_object( RemoteObject* o )
-{
-	cbus_dbg("%s: registering remote object %s",unique_name(),o->name().c_str());
-
-	if(add_filter( o->_receiver ))
-	{
-//		std::string match = "interface='" + o->name() + "'";
-//		add_match(match.c_str());
-		_registered_objects.push_back(o);
-		return true;
-	}
-	return false;
-}
-
-bool Connection::unregister_object( RemoteObject* o )
-{
-	cbus_dbg("%s: unregistering remote object %s",unique_name(),o->name().c_str());
-
-	ObjectPList::iterator oi = std::find(
-		_registered_objects.begin(),
-		_registered_objects.end(),
-		o
-	);
-	if( oi != _registered_objects.end() && (*oi)->name() == o->name() )
-	{	
-	//	remove_match("type='signal'");
-
-	
-	//	std::string match = "source='" + o->name() + "'";
-	//	remove_match(match.c_str());
-
-		o->_base_service = NULL;
-		remove_filter( o->_receiver );
-	
-	
- 	}
-
-	return true;
-}
-
-void Connection::unregister_function_stub( DBusConnection* conn, void* data )
-{
-	LocalObject* o = static_cast<LocalObject*>(data);
-	Connection* c = o->_base_service;
-	if(c)
-	{
-		ObjectPList::iterator oi = std::find(
-			c->_registered_objects.begin(),
-			c->_registered_objects.end(),
-			o
-		);
-		if( oi != c->_registered_objects.end() )
-		{
-			(*oi)->_base_service = NULL;
-			c->_registered_objects.erase(oi);
-		}
-	}
-	//else error
-}
-
-DBusHandlerResult Connection::message_function_stub( DBusConnection*, DBusMessage* dmsg, void* data )
-{
-	Message msg(dmsg);	
-
-	Object* o = static_cast<Object*>(data);
-
-	if( o )
-	{
-		cbus_dbg("got message from %s for object %s", msg.destination(), o->name().c_str());
-
-		return o->handle_message(msg) ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-	}
-	else return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
-/*
-00042 typedef enum
-00043 {
-00044   DBUS_HANDLER_RESULT_HANDLED,         
-00045   DBUS_HANDLER_RESULT_NOT_YET_HANDLED, 
-00046   DBUS_HANDLER_RESULT_NEED_MEMORY      
-00047 } DBusHandlerResult;
-*/
-}
-#endif
 
 void Connection::do_dispatch()
 {
@@ -341,12 +213,6 @@ void Connection::dispatch_status_stub( DBusConnection* dc, DBusDispatchStatus st
 		break;
 	}
 }
-
-/*
-00086 typedef DBusHandlerResult (* DBusHandleMessageFunction) (DBusConnection     *connection,
-00087                                                          DBusMessage        *message,
-00088                                                          void               *user_data);
-*/
 
 DBusHandlerResult Connection::message_filter_stub( DBusConnection*, DBusMessage* dmsg, void* data )
 {

@@ -69,15 +69,7 @@ public:
 	void request_name( const char* name, int flags = 0 );
 
 	bool has_name( const char* name );
-#if 0
-	bool register_object( LocalObject* );
 
-	bool unregister_object( LocalObject* );
-
-	bool register_object( RemoteObject* );
-
-	bool unregister_object( RemoteObject* );
-#endif
 private:
 
 	inline void ref();
@@ -85,10 +77,6 @@ private:
 	inline void unref();
 
 	void init();
-
-//	static void unregister_function_stub( DBusConnection*, void* );
-
-//	static DBusHandlerResult message_function_stub( DBusConnection*, DBusMessage*, void* );
 
 	static void dispatch_status_stub( DBusConnection*, DBusDispatchStatus, void* );
 
@@ -105,8 +93,6 @@ private:
 private:
 
 	bool _dispatch_pending;
-
-//	static DBusObjectPathVTable _vtable;
 
 //	ObjectPList	_registered_objects;
 

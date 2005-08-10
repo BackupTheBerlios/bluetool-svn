@@ -22,9 +22,6 @@ namespace DBus
 namespace DBus
 {
 
-/*	In fact, those are not objects, but classes, which you
-	can instantiate (as objects) how many times you want 
-*/
 class Object : protected virtual IfaceTracker
 {
 protected:
@@ -90,8 +87,6 @@ private:
 	void register_obj();
 	void unregister_obj();
 
-//	bool invoke_method( const CallMessage& msg );
-
 private:
 
 	static DBusObjectPathVTable _vtable;
@@ -119,8 +114,6 @@ private:
 
 	void register_obj();
 	void unregister_obj();
-
-//	bool dispatch_signal( const SignalMessage& msg );
 
 private:
 	

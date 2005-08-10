@@ -180,10 +180,6 @@ public:
 
 	inline MessageIter w_iter();
 
-//	bool read( const char* format, int first_type, ... ) const;
-
-//	bool write( const char* format, int first_type, ... );
-
 	bool append( int first_type, ... );
 
 	void terminate();

@@ -63,8 +63,8 @@ public:
 
 private:
 	DBusError	_error;
-//	string		_name;
-//	string		_message;
+//	std::string	_name;
+//	std::string	_message;
 };
 
 }//namespace DBus

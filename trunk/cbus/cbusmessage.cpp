@@ -59,34 +59,6 @@ ReturnMessage::ReturnMessage( const CallMessage& callee )
 	_message = dbus_message_new_method_return(callee._message);
 }
 
-/*MessageIter::MessageIter( Message& m )
-{
-	if(!dbus_message_iter_init(m._message, &_iter))
-		throw Error("FormatError", "Cannot iterate arguments");//todo
-}*/
-/*
-bool Message::read( const char* format, int first_type, ... ) const
-{
-	Error e;
-
-	va_list vl;
-	va_start(vl, first_type);
-	va_end(vl);
-
-	bool b = dbus_message_get_args_valist(_message, e, first_type, vl);
-	if(e)	throw e;
-	return b;
-}
-
-bool Message::write( const char* format, int first_type, ... )
-{
-	va_list vl;
-	va_start(vl, first_type);
-	va_end(vl);
-
-	return dbus_message_append_args_valist(_message, first_type, vl);
-}
-*/
 bool Message::append( int first_type, ... )
 {
 	va_list vl;

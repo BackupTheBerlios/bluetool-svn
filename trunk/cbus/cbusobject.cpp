@@ -17,13 +17,11 @@ LocalObject::LocalObject( const char* name, Connection& conn )
 :	Object(name,conn)
 {
 	register_obj();
- 	//_conn.register_object(this);
 }
 
 LocalObject::~LocalObject()
 {
 	if(noref()) unregister_obj();
- 	//_conn.unregister_object(this);
 }
 
 DBusObjectPathVTable LocalObject::_vtable =
@@ -69,8 +67,7 @@ void LocalObject::unregister_obj()
 
 void LocalObject::unregister_function_stub( DBusConnection* conn, void* data )
 {
-	
- 	//what do we have to do here ?
+ 	// XXX: what do we have to do here ?
 }
 
 DBusHandlerResult LocalObject::message_function_stub( DBusConnection*, DBusMessage* dmsg, void* data )
@@ -81,7 +78,12 @@ DBusHandlerResult LocalObject::message_function_stub( DBusConnection*, DBusMessa
 
 	if( o )
 	{
-		cbus_dbg("got message #%d from %s to %s (in %s)", msg.serial(), msg.sender(), msg.destination(), o->oname().c_str());
+		cbus_dbg("got message #%d from %s to %s (in %s)",
+			msg.serial(), 
+			msg.sender(), 
+			msg.destination(),
+			o->oname().c_str()
+		);
 
 		return o->handle_message(msg) ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
@@ -112,7 +114,6 @@ RemoteObject::RemoteObject( const char* name, Connection& conn )
 :	Object(name, conn)
 {
 	register_obj();
- 	//_conn.register_object(this);
 }
 
 #if 0
@@ -126,7 +127,6 @@ RemoteObject::RemoteObject( const RemoteObject& )
 RemoteObject::~RemoteObject()
 {
 	if(noref()) unregister_obj();
- 	//_conn.unregister_object(this);
 }
 
 void RemoteObject::register_obj()

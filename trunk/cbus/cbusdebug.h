@@ -4,9 +4,9 @@
 #include "../common/debug.h"
 
 #ifdef _DEBUG
-#	define cbus_dbg(format, ...)	fprintf(stderr, "dbus|");		\
+#	define cbus_dbg(format, ...){	fprintf(stderr, "dbus|");		\
 					fprintf(stderr, format, ##__VA_ARGS__);	\
-					fprintf(stderr, "\n");
+					fprintf(stderr, "\n");	}
 #else
 #	define cbus_dbg(format, ...)
 #endif

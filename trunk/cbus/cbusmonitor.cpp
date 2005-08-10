@@ -4,31 +4,6 @@
 
 namespace DBus
 {
-#if 0
-WatchInfo::WatchInfo( DBusWatch* w )
-{
-	int flags = dbus_watch_get_flags(w);
-
-	this->watch = w;	//todo: should we alter the refcount?
-	this->fd = dbus_watch_get_fd(w);
-	this->events = 0;
-
-	if( flags & DBUS_WATCH_READABLE )
-		events |= POLLIN;
-	if( flags & DBUS_WATCH_WRITABLE )
-		events |= POLLOUT;
-}
-bool WatchInfo::operator == ( const WatchInfo& wi )
-{
-	return fd == wi.fd && events == wi.events;
-}
-
-TimeoutInfo::TimeoutInfo( DBusTimeout* t )
-:	timeout( dbus_timeout_get_interval(t) )
-{
-	this->dbus_ptr = t;
-}
-#endif
 
 struct Monitor::Private
 {
@@ -237,24 +212,6 @@ void Monitor::Private::fd_ready( FdNotifier& fn )
 
 
 	parent->do_dispatch();
-
-	//if this is a connection, do dbus_connection_dispatch()
-	//while (dbus_connection_dispatch(connection) == DBUS_DISPATCH_DATA_REMAINS) 
-	//	;
-
-	//also, Connection needs the following
-	//bool handleObjectCall(DBusMessage *message) const
-	//bool handleSignal(DBusMessage *message) const
-
-	/*	affinchè una connection riceva messaggi è anche necessario che registri un
-		opportuno filtro con destination="nome di questa connessione"
-		dbus_connection_add_filter();
-
-		dove l'handler deve avere la forma
-
-		static DBusHandlerResult qDBusSignalFilter(DBusConnection *connection,
-                                           DBusMessage *message, void *data)
-	*/
 }
 
 #if 0
@@ -270,14 +227,14 @@ void Monitor::Private::fd_ready_out( FdNotifier& fn )
 
 	parent->do_dispatch();
 
-/*	if(parent->_dispatch_pending)
+	if(parent->_dispatch_pending)
 	{
 		cbus_dbg("dispatching on %p", ptr.connection);
 
 		while (dbus_connection_dispatch(ptr.connection) == DBUS_DISPATCH_DATA_REMAINS) 
 		; //loop
 		parent->_dispatch_pending = false;
-	}*/
+	}
 }
 #endif
 
