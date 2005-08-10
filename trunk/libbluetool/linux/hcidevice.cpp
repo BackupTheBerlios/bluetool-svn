@@ -704,8 +704,19 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 /*
 */
 
-RemoteDevice::RemoteDevice( const BdAddr& addr, u8 pscan_rpt_mode , u8 pscan_mode, u16 clk_offset )
-: _addr(addr), _pscan_rpt_mode(pscan_rpt_mode), _pscan_mode(pscan_mode), _clk_offset(clk_offset)
+RemoteDevice::RemoteDevice
+(
+	LocalDevice& loc_dev,
+	const BdAddr& addr,
+	u8 pscan_rpt_mode,
+	u8 pscan_mode,
+	u16 clk_offset
+)
+:	_addr(addr),
+	_pscan_rpt_mode(pscan_rpt_mode),
+	_pscan_mode(pscan_mode),
+	_clk_offset(clk_offset),
+	_local_dev(loc_dev)
 {
 
 }

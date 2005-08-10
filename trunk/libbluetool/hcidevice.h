@@ -101,6 +101,7 @@ class RemoteDevice
 public:
 
 	RemoteDevice(
+		LocalDevice& local_dev,
 		const BdAddr& addr,
 		u8 pscan_rpt_mode,
 		u8 pscan_mode,
@@ -134,8 +135,7 @@ private:
 	u8		_pscan_rpt_mode;
 	u8		_pscan_mode;
 	u16		_clk_offset;
-	Connection* 	_acl_conn;
-
+	LocalDevice&	_local_dev;
 };
 
 const BdAddr& RemoteDevice::addr() const

@@ -336,6 +336,11 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
 
 	_device.start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
+
+	timeval now;
+	gettimeofday(&now, NULL);
+
+	_time_last_inquiry = now.tv_sec*1000 + now.tv_usec/1000.0;
 }
 
 void HciDevice::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
@@ -406,7 +411,7 @@ void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool ti
 			{
 				evt_cmd_status* cs = (evt_cmd_status*) evt.edata;
 
-				if(!cs->status) goto nosend;
+				if(!cs->status) goto nodel;
 
 				char* error_string = strerror(bt_error(cs->status));
 				reply->append( DBUS_TYPE_UINT16, &cs->status,
@@ -433,25 +438,22 @@ void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool ti
 
 				blue_dbg("Found remote device with address %s !",straddr);
 
-				break;
+				goto nosend;
 			}
 			case EVT_INQUIRY_COMPLETE:
 			{
-				timeval now;
-				gettimeofday(&now, NULL);
-
-				_time_last_inquiry = now.tv_sec*1000 + now.tv_usec/1000.0;
-
 				finalize_cache();
 
-				break;
+				/* TODO: emit appropriate signals
+				*/
+				goto nosend;
 			}
 		}
 	}
 
 	conn().send(*reply);
-	delete reply;
-nosend:	return;
+nosend:	delete reply;
+nodel:	return;
 }
 
 void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::ReturnMessage* reply )
@@ -464,6 +466,14 @@ void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::Retu
 		{
 			switch( evt.ocf )
 			{
+				case OCF_INQUIRY_CANCEL:
+				{
+					finalize_cache();
+					
+					/* todo: emit appropriate signal
+					*/
+					break;
+				}
 			}
 			break;
 		}
@@ -670,6 +680,8 @@ const char* __remote_name( const HciDevice& parent, const BdAddr& addr )
 {
 	memset(__hci_remote_name, 0, 256);
 
+	/* that's UGLY!
+	*/
 	strncpy(__hci_remote_name,
 		(std::string(
 			  parent.oname()
@@ -684,7 +696,7 @@ const char* __remote_name( const HciDevice& parent, const BdAddr& addr )
 HciRemote::HciRemote( HciDevice& parent, const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
 :	DBus::LocalInterface(DBUS_HCIREM_IFACE),
 	DBus::LocalObject( __remote_name(parent, addr), DBus::Connection::SystemBus() ),
-	_device(addr, pscan_rpt_mode, pscan_mode, clk_offset)
+	_device(parent._device, addr, pscan_rpt_mode, pscan_mode, clk_offset)
 	//_parent(parent)
 {
 	register_method( HciRemote, GetProperty );
