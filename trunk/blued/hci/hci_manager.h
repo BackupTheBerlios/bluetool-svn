@@ -9,7 +9,7 @@
 #include "hci_tracker.h"
 #include "hci_device.h"
 
-class HciManager : public DBus::LocalObject, public DBus::LocalInterface
+class HciManager : public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
 	HciManager( DBus::Connection& conn );

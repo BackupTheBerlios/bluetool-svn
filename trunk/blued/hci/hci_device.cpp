@@ -728,7 +728,39 @@ void HciRemote::GetProperty( const DBus::CallMessage& msg )
 
 	blue_dbg("method GetProperty(%s) called on %s",property.c_str(),oname().c_str());
 
-	//DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
+
+	try
+	{
+
+//	if( property == "auth_enable" )	
+//		_device.get_auth_enable(reply, HCI_TIMEOUT);
+//	else
+	{
+		u16 err = 1;
+		const char* strerr = "No such property";
+
+		reply->append( DBUS_TYPE_UINT16, &err,
+			       DBUS_TYPE_STRING, &strerr,
+			       DBUS_TYPE_INVALID
+		);
+		conn().send(*reply);
+		delete reply;
+	}
+	
+	}
+	catch( Hci::Exception& e )
+	{
+		u16 err = 1;
+		const char* strerr = e.what();
+
+		reply->append( DBUS_TYPE_UINT16, &err,
+			       DBUS_TYPE_STRING, &strerr,
+			       DBUS_TYPE_INVALID
+		);
+		conn().send(*reply);
+		delete reply;
+	}
 }
 
 void HciRemote::SetProperty( const DBus::CallMessage& msg )
@@ -739,5 +771,37 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 
 	blue_dbg("method SetProperty(%s) called on %s",property.c_str(),oname().c_str());
 
-	//DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
+
+	try
+	{
+
+//	if( property == "auth_enable" )	
+//		_device.get_auth_enable(reply, HCI_TIMEOUT);
+//	else
+	{
+		u16 err = 1;
+		const char* strerr = "No such property";
+
+		reply->append( DBUS_TYPE_UINT16, &err,
+			       DBUS_TYPE_STRING, &strerr,
+			       DBUS_TYPE_INVALID
+		);
+		conn().send(*reply);
+		delete reply;
+	}
+	
+	}
+	catch( Hci::Exception& e )
+	{
+		u16 err = 1;
+		const char* strerr = e.what();
+
+		reply->append( DBUS_TYPE_UINT16, &err,
+			       DBUS_TYPE_STRING, &strerr,
+			       DBUS_TYPE_INVALID
+		);
+		conn().send(*reply);
+		delete reply;
+	}
 }

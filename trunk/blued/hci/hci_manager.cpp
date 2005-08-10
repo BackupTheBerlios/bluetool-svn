@@ -17,8 +17,8 @@ HciService::HciService()
 */
 
 HciManager::HciManager( DBus::Connection& conn )
-:	DBus::LocalObject	( DBUS_HCIMAN_PATH, conn ),
-	DBus::LocalInterface	( DBUS_HCIMAN_IFACE )
+:	DBus::LocalInterface	( DBUS_HCIMAN_IFACE ),
+	DBus::LocalObject	( DBUS_HCIMAN_PATH, conn )
 {
 	/*	export all methods in the interface
 	*/
