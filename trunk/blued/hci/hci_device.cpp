@@ -21,9 +21,6 @@ HciDevice::HciDevice( std::string iface_name )
 	register_method( HciDevice, GetProperty );
 	register_method( HciDevice, SetProperty );
 	register_method( HciDevice, StartInquiry );
-
-	/*	method receiving (asynchronous) hardware events
-	*/
 }
 
 HciDevice::~HciDevice()
@@ -683,7 +680,17 @@ Hci::RemoteDevice* HciDevice::on_new_cache_entry
 	Hci::RemoteInfo& info
 )
 {
-	std::string rem_name = oname() + DBUS_HCIREM_SUBPATH + info.addr.to_string();
+	/* bluetooth addresses contain colons, which are not 
+	   allowed in the DBUS specification
+	*/
+	std::string valid_addr = info.addr.to_string();
+	for( uint i = 0; i < valid_addr.length(); ++i)
+	{
+		if(valid_addr[i] == ':')
+			valid_addr[i] = '_';
+	}
+
+	std::string rem_name = oname() + DBUS_HCIREM_SUBPATH + valid_addr;
 
 	HciRemote* hr = new HciRemote(rem_name.c_str(),this,info);
 
