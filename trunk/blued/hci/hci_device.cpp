@@ -12,9 +12,9 @@
 
 HciDevice::HciDevice( std::string iface_name )
 :
+	Hci::LocalDevice	( iface_name.c_str() ),
 	DBus::LocalInterface	( DBUS_HCIDEV_IFACE ),
-	DBus::LocalObject	( (DBUS_HCIDEV_PATH + iface_name).c_str(), DBus::Connection::SystemBus() ),
-	_device			( iface_name.c_str() )
+	DBus::LocalObject	( (DBUS_HCIDEV_PATH + iface_name).c_str(), DBus::Connection::SystemBus() )
 {
 	/*	export methods
 	*/
@@ -24,12 +24,11 @@ HciDevice::HciDevice( std::string iface_name )
 
 	/*	method receiving (asynchronous) hardware events
 	*/
-	_device.on_event.connect( sigc::mem_fun(this, &HciDevice::on_hci_event ));
 }
 
 HciDevice::~HciDevice()
 {
-	clear_cache();
+	//clear_cache();
 }
 
 /*	device properties management
@@ -48,16 +47,16 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	{
 
 	if( property == "auth_enable" )	
-		_device.get_auth_enable(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_auth_enable(reply, HCI_TIMEOUT);
 	else
 	if( property == "encrypt_mode" )
-		_device.get_encrypt_mode(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_encrypt_mode(reply, HCI_TIMEOUT);
 	else
 //	if( property == "security_manager_enable" )
-//		_device.get_secman_enable();
+//		Hci::LocalDevice::get_secman_enable();
 //	else
 	if( property == "scan_type" )
-		_device.get_scan_type(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_scan_type(reply, HCI_TIMEOUT);
 	else
 	if( property == "packet_type" )
 	{
@@ -75,16 +74,16 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	
 	else
 	if( property == "address" )
-		_device.get_addr(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_address(reply, HCI_TIMEOUT);
 	else
 	if( property == "local_name" )
-		_device.get_local_name(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_name(reply, HCI_TIMEOUT);
 	else
 	if( property == "device_class" )
-		_device.get_class(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_class(reply, HCI_TIMEOUT);
 	else
 	if( property == "voice_setting" )
-		_device.get_voice_setting(reply, HCI_TIMEOUT);
+		Hci::LocalDevice::get_voice_setting(reply, HCI_TIMEOUT);
 	else
 	if( property == "inquiry_access_mode" )
 	{
@@ -127,10 +126,10 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	
 	else
 	if( property == "features" )
-		_device.get_features(reply,HCI_TIMEOUT);
+		Hci::LocalDevice::get_features(reply,HCI_TIMEOUT);
 	else
 	if( property == "version_info" )
-		_device.get_version(reply,HCI_TIMEOUT);
+		Hci::LocalDevice::get_version(reply,HCI_TIMEOUT);
 	else
 	if( property == "revision_info" )
 	{
@@ -180,35 +179,35 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	if( property == "auth_enable" )
 	{
 		u8 enable = i.get_byte();
-		_device.set_auth_enable(enable,reply,HCI_TIMEOUT);	
+		Hci::LocalDevice::set_auth_enable(enable,reply,HCI_TIMEOUT);	
 	}
 	
 	else
 	if( property == "encrypt_mode" )
 	{
 		u8 mode = i.get_byte();
-		_device.set_encrypt_mode(mode,reply,HCI_TIMEOUT);
+		Hci::LocalDevice::set_encrypt_mode(mode,reply,HCI_TIMEOUT);
 	}
 	
 //	else
 //	if( property == "security_manager_enable" )
 //	{
 //		bool enable = i.get_bool();
-//		_device.set_secman_enable(enable,reply);
+//		Hci::LocalDevice::set_secman_enable(enable,reply);
 //	}
 	
 	else
 	if( property == "scan_type" )
 	{
 		u8 type = i.get_byte();
-		_device.set_scan_type(type,reply,HCI_TIMEOUT);
+		Hci::LocalDevice::set_scan_type(type,reply,HCI_TIMEOUT);
 	}
 	
 //	else
 //	if( property == "inquiry_scan_enable" )
 //	{
 	//	bool enable = i.get_bool();
-	//	_device.set_iscan_enable(enable, reply);	
+	//	Hci::LocalDevice::set_iscan_enable(enable, reply);	
 //	}
 	
 	else
@@ -235,7 +234,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	if( property == "local_name" )
 	{
 		const char* name = i.get_string();
-		_device.set_local_name(name, reply, HCI_TIMEOUT);
+		Hci::LocalDevice::set_name(name, reply, HCI_TIMEOUT);
 	}
 	
 	else
@@ -335,14 +334,15 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
 
-	_device.start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
-
+	Hci::LocalDevice::start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
+#if 0
 	timeval now;
 	gettimeofday(&now, NULL);
 
 	_time_last_inquiry = now.tv_sec*1000 + now.tv_usec/1000.0;
+#endif
 }
-
+#if 0
 void HciDevice::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
 {
 	const std::string straddr = addr.to_string();
@@ -389,286 +389,253 @@ void HciDevice::clear_cache()
 		ri = ti;
 	}
 }
-
-void HciDevice::on_hci_event( const Hci::EventPacket& evt, void* cookie, bool timedout )
+#endif
+void HciDevice::on_get_auth_enable
+(
+	u16 status,
+	void* cookie,
+	u8 auth
+)
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	if( timedout )
-	{
-		u16 error = 1;
-		const char* estring = "Request timed out";
-		reply->append( DBUS_TYPE_UINT16, &error,
-			       DBUS_TYPE_STRING, &estring,
-			       DBUS_TYPE_INVALID
-		);
-	}
-	else
-	{
-		switch( evt.code )
-		{
-			case EVT_CMD_STATUS:
-			{
-				evt_cmd_status* cs = (evt_cmd_status*) evt.edata;
-
-				if(!cs->status) goto nodel;
-
-				char* error_string = strerror(bt_error(cs->status));
-				reply->append( DBUS_TYPE_UINT16, &cs->status,
-					       DBUS_TYPE_STRING, &error_string,
-					       DBUS_TYPE_INVALID
-				);
-				break;
-			}
-			case EVT_CMD_COMPLETE:
-			{
-				handle_command_complete(evt,reply);
-				break;
-			}
-
-			/*	command-specific events
-			*/
-			case EVT_INQUIRY_RESULT:
-			{
-				inquiry_info* r = (inquiry_info*) evt.edata;
-
-				char straddr[18] = {0};
-
-				ba2str(&(r->bdaddr), straddr);
-
-				blue_dbg("Found remote device with address %s !",straddr);
-
-				goto nosend;
-			}
-			case EVT_INQUIRY_COMPLETE:
-			{
-				finalize_cache();
-
-				/* TODO: emit appropriate signals
-				*/
-				goto nosend;
-			}
-		}
-	}
-
-	conn().send(*reply);
-nosend:	delete reply;
-nodel:	return;
-}
-
-void HciDevice::handle_command_complete( const Hci::EventPacket& evt, DBus::ReturnMessage* reply )
-{
-	u16 error_status = 0;
-
-	switch( evt.ogf )
-	{
-		case OGF_LINK_CTL:
-		{
-			switch( evt.ocf )
-			{
-				case OCF_INQUIRY_CANCEL:
-				{
-					finalize_cache();
-					
-					/* todo: emit appropriate signal
-					*/
-					break;
-				}
-			}
-			break;
-		}
-		case OGF_LINK_POLICY:
-		{
-			switch( evt.ocf )
-			{
-			}
-			break;
-		}
-		case OGF_HOST_CTL:
-		{
-			switch( evt.ocf )
-			{
-				case OCF_READ_AUTH_ENABLE:
-				case OCF_READ_ENCRYPT_MODE:
-				{
-					u8* data = (u8*) evt.edata;
-					u16 status = 0;
-
-					reply->append( DBUS_TYPE_UINT16, &(status),
-						       DBUS_TYPE_BYTE,   (data),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_INQUIRY_SCAN_TYPE:
-				{
-					read_inquiry_scan_type_rp* r = (read_inquiry_scan_type_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_BYTE,   &(r->type),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_LOCAL_NAME:
-				{
-					read_local_name_rp* r = (read_local_name_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					const char* local_name = (char*)r->name;
-
-					blue_dbg("local name request returned '%s'",local_name);
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_STRING, &(local_name),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_CLASS_OF_DEV:
-				{
-					read_class_of_dev_rp* r = (read_class_of_dev_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					/* I'm leaving this as a numerical value to allow clients
-					   to translate the device properties in the local language
-					*/
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_UINT32, &(r->dev_class),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_VOICE_SETTING:
-				{
-					read_voice_setting_rp* r = (read_voice_setting_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_UINT16, &(r->voice_setting),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_WRITE_INQUIRY_SCAN_TYPE:
-				case OCF_CHANGE_LOCAL_NAME:
-				{
-					u16 status = 0;
-
-					reply->append( DBUS_TYPE_UINT16, &(status),
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-			}
-			break;
-		}
-		case OGF_INFO_PARAM:
-		{
-			switch( evt.ocf )
-			{
-				case OCF_READ_BD_ADDR:
-				{
-					read_bd_addr_rp* r = (read_bd_addr_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					char local_addr[32] = {0};
-					ba2str(&(r->bdaddr),local_addr);
-					char* local_addr_ptr = local_addr;
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_STRING, &local_addr_ptr,
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_LOCAL_VERSION:
-				{
-					read_local_version_rp* r = (read_local_version_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-
-					const char* hci_ver = hci_vertostr(r->hci_ver);
-					const char* lmp_ver = lmp_vertostr(r->hci_ver);
-					const char* comp_id = bt_compidtostr(r->manufacturer);
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_STRING, &(hci_ver),
-						       DBUS_TYPE_UINT16, &(r->hci_rev),
-						       DBUS_TYPE_STRING, &(lmp_ver),
-						       DBUS_TYPE_UINT16, &(r->lmp_subver),
-						       DBUS_TYPE_STRING, &comp_id,
-						       DBUS_TYPE_INVALID
-					);
-					break;
-				}
-				case OCF_READ_LOCAL_FEATURES:
-				{
-					read_local_features_rp* r = (read_local_features_rp*) evt.edata;
-
-					if(r->status)
-					{
-						error_status = r->status;
-						goto write_error;
-					}
-					
-					char* lmp_feat = lmp_featurestostr(r->features," ",0);
-
-					reply->append( DBUS_TYPE_UINT16, &(r->status),
-						       DBUS_TYPE_STRING, &(lmp_feat),
-						       DBUS_TYPE_INVALID
-					); //todo: format this field as a string array
-
-					free(lmp_feat);
-					break;
-				}
-			}
-			break;
-		}
-		case OGF_STATUS_PARAM:
-		{
-			break;
-		}
-	}
-	return;
-
-write_error:
-
-	char* error_string = strerror(bt_error(error_status));
-	reply->append( DBUS_TYPE_UINT16, &error_status,
-		       DBUS_TYPE_STRING,&error_string,
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(auth),
 		       DBUS_TYPE_INVALID
 	);
+}
+
+void HciDevice::on_set_auth_enable
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_encrypt_mode
+(
+	u16 status,
+	void* cookie,
+	u8 encrypt
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(encrypt),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_set_encrypt_mode
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_scan_type
+(
+	u16 status,
+	void* cookie,
+	u8 type
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(type),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_set_scan_type
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_name
+(
+	u16 status,
+	void* cookie,
+	const char* name
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(name),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_set_name
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_class
+(
+	u16 status,
+	void* cookie,
+	u8* dev_class
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(dev_class[0]),
+		       DBUS_TYPE_BYTE,   &(dev_class[1]),
+		       DBUS_TYPE_BYTE,   &(dev_class[2]),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_set_class
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_voice_setting
+(
+	u16 status,
+	void* cookie,
+	u16 setting
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_UINT16, &(setting),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_set_voice_setting
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_address
+(
+	u16 status,
+	void* cookie,
+	const char* address
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(address),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_version
+(
+	u16 status,
+	void* cookie,
+	const char* hci_ver,
+	u16 hci_rev,
+	const char* lmp_ver,
+	u16 lmp_subver,
+	const char* manufacturer
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(hci_ver),
+		       DBUS_TYPE_UINT16, &(hci_rev),
+		       DBUS_TYPE_STRING, &(lmp_ver),
+		       DBUS_TYPE_UINT16, &(lmp_subver),
+		       DBUS_TYPE_STRING, &(manufacturer),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_get_features
+(
+	u16 status,
+	void* cookie,
+	const char* features
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(features),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_after_event( void* cookie )
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	conn().send(*reply);
+	/* if status != 0, send an ErrorMessage instead
+	*/
+	delete reply;
+}
+
+
+/*	special handlers
+*/
+Hci::RemoteDevice* HciDevice::on_new_remote
+(
+	Hci::LocalDevice* local_dev,
+	const BdAddr& addr,
+	u8 pscan_rpt_mode,
+	u8 pscan_mode,
+	u16 clk_offset
+)
+{
+	return new HciRemote((HciDevice*)local_dev,addr,pscan_rpt_mode,pscan_mode,clk_offset);
 }
 
 /*	remote device
@@ -676,7 +643,7 @@ write_error:
 
 char __hci_remote_name[256];
 
-const char* __remote_name( const HciDevice& parent, const BdAddr& addr )
+const char* __remote_name( const HciDevice* parent, const BdAddr& addr )
 {
 	memset(__hci_remote_name, 0, 256);
 
@@ -684,7 +651,7 @@ const char* __remote_name( const HciDevice& parent, const BdAddr& addr )
 	*/
 	strncpy(__hci_remote_name,
 		(std::string(
-			  parent.oname()
+			  parent->oname()
 			+ DBUS_HCIREM_SUBPATH
 			+ addr.to_string()
 		)).c_str(),
@@ -693,21 +660,30 @@ const char* __remote_name( const HciDevice& parent, const BdAddr& addr )
 	return __hci_remote_name;
 }
 
-HciRemote::HciRemote( HciDevice& parent, const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
-:	DBus::LocalInterface(DBUS_HCIREM_IFACE),
-	DBus::LocalObject( __remote_name(parent, addr), DBus::Connection::SystemBus() ),
-	_device(parent._device, addr, pscan_rpt_mode, pscan_mode, clk_offset)
-	//_parent(parent)
+HciRemote::HciRemote( HciDevice* parent, const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+:	Hci::RemoteDevice( (Hci::LocalDevice*)parent, addr, pscan_rpt_mode, pscan_mode, clk_offset ),
+	DBus::LocalInterface(DBUS_HCIREM_IFACE),
+	DBus::LocalObject( __remote_name(parent, addr), DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
 	register_method( HciRemote, SetProperty );
 }
 
+void HciRemote::GetProperty( const DBus::CallMessage& msg )
+{
+}
+
+
+void HciRemote::SetProperty( const DBus::CallMessage& msg )
+{
+}
+
+#if 0
 void HciRemote::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
 {
-	_device.page_scan_repeat_mode(pscan_rpt_mode);
-	_device.page_scan_mode(pscan_mode);
-	_device.clock_offset(clk_offset);
+	Hci::LocalDevice::page_scan_repeat_mode(pscan_rpt_mode);
+	Hci::LocalDevice::page_scan_mode(pscan_mode);
+	Hci::LocalDevice::clock_offset(clk_offset);
 
 	timeval now;
 	gettimeofday(&now, NULL);
@@ -734,7 +710,7 @@ void HciRemote::GetProperty( const DBus::CallMessage& msg )
 	{
 
 //	if( property == "auth_enable" )	
-//		_device.get_auth_enable(reply, HCI_TIMEOUT);
+//		Hci::LocalDevice::get_auth_enable(reply, HCI_TIMEOUT);
 //	else
 	{
 		u16 err = 1;
@@ -777,7 +753,7 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 	{
 
 //	if( property == "auth_enable" )	
-//		_device.get_auth_enable(reply, HCI_TIMEOUT);
+//		Hci::LocalDevice::get_auth_enable(reply, HCI_TIMEOUT);
 //	else
 	{
 		u16 err = 1;
@@ -805,3 +781,4 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 		delete reply;
 	}
 }
+#endif

@@ -5,13 +5,11 @@
 #include <string>
 #include <algorithm>
 
-#include <sys/time.h>
-
 #include "../btool_common.h"
 
 #include "../../cbus/cbus.h"
 #include "../../libbluetool/hcidevice.h"
-#include "../../libbluetool/hcievent.h"
+#include "../../libbluetool/bdaddr.h"
 
 #define	HCI_TIMEOUT 120000
 
@@ -19,7 +17,7 @@ class HciDevice;
 typedef std::map<std::string, HciDevice*>	HciDevicePTable;
 
 class HciRemote;
-typedef std::map<std::string, HciRemote*>	HciRemotePTable;
+//typedef std::map<std::string, HciRemote*>	HciRemotePTable;
 
 class HciConnection;
 typedef std::map<u16, HciConnection*>		HciConnPTable;
@@ -27,8 +25,8 @@ typedef std::map<u16, HciConnection*>		HciConnPTable;
 
 /*	local HCI device
 */
-class HciDevice : public DBus::LocalInterface, public DBus::LocalObject
-{
+class HciDevice : private Hci::LocalDevice, public DBus::LocalInterface, public DBus::LocalObject
+{					//todo, split into different interfaces
 public:
 	HciDevice( std::string iface_name );
 	~HciDevice();
@@ -52,19 +50,124 @@ public:
 	void DeviceOutOfRange	( const HciRemote& );
 
 private:
-	void on_hci_event( const Hci::EventPacket&, void* cookie, bool timedout );
 
-	void handle_command_complete( const Hci::EventPacket&, DBus::ReturnMessage* rpl );
+	/*	event handlers
+	*/
+	void on_get_auth_enable
+	(
+		u16 status,
+		void* cookie,
+		u8 auth
+	);
 
-	void clear_cache();
-	void update_cache( const BdAddr&, u8, u8, u16 );
-	void finalize_cache();
+	void on_set_auth_enable
+	(
+		u16 status,
+		void* cookie
+	);
 
-private:
-	Hci::LocalDevice	_device;
-	HciRemotePTable		_inquiry_cache;
+	void on_get_encrypt_mode
+	(
+		u16 status,
+		void* cookie,
+		u8 encrypt
+	);
 
-	double			_time_last_inquiry;
+	void on_set_encrypt_mode
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_scan_type
+	(
+		u16 status,
+		void* cookie,
+		u8 auth
+	);
+
+	void on_set_scan_type
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_name
+	(
+		u16 status,
+		void* cookie,
+		const char* name
+	);
+
+	void on_set_name
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_class
+	(
+		u16 status,
+		void* cookie,
+		u8* dev_class
+	);
+
+	void on_set_class
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_voice_setting
+	(
+		u16 status,
+		void* cookie,
+		u16 setting
+	);
+
+	void on_set_voice_setting
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_address
+	(
+		u16 status,
+		void* cookie,
+		const char* address
+	);
+
+	void on_get_version
+	(
+		u16 status,
+		void* cookie,
+		const char* hci_ver,
+		u16 hci_rev,
+		const char* lmp_ver,
+		u16 lmp_subver,
+		const char* manufacturer
+	);
+
+	void on_get_features
+	(
+		u16 status,
+		void* cookie,
+		const char* features
+	);
+
+	/*	special handlers
+	*/
+	void on_after_event( void* cookie );
+
+	Hci::RemoteDevice* on_new_remote
+	(
+		Hci::LocalDevice* local_dev,
+		const BdAddr& addr,
+		u8 pscan_rpt_mode,
+		u8 pscan_mode,
+		u16 clk_offset
+	);
 
 friend class HciRemote;
 friend class HciConnection;
@@ -72,30 +175,52 @@ friend class HciConnection;
 
 /*	remote Bluetooth device
 */
-class HciRemote : public DBus::LocalInterface, public DBus::LocalObject
+class HciRemote : public Hci::RemoteDevice, public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
-	HciRemote( HciDevice& parent,
-		   const BdAddr& addr,
-		   u8 pscan_rpt_mode,
-		   u8 pscan_mode,
-		   u16 clk_offset );
+	HciRemote
+	( 
+		HciDevice* parent,
+		const BdAddr& addr,
+		u8 pscan_rpt_mode,
+		u8 pscan_mode,
+		u16 clk_offset
+	);
 
 	/*	exported methods
 	*/
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
-	/*	class methods
+	/*	event handlers
 	*/
-	void update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset );
-	double last_updated() const;
+	void on_get_name
+	(	
+		u16 status,
+		void* cookie,
+		const char* name
+	);
+
+	void on_get_version
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_features
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_get_clock_offset
+	(
+		u16 status,
+		void* cookie
+	);
 
 private:
-	Hci::RemoteDevice	_device;
 	HciConnPTable		_connections;
-
-	double			_time_last_update;
 };
 
 /*	HCI Connection

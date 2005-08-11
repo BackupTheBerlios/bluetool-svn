@@ -1,6 +1,9 @@
 #ifndef __BTOOL_COMMON_H
 #define __BTOOL_COMMON_H
 
+#define BTOOL_ERROR_MALFORMED	"org.bluetool.error.Malformed"
+#define BTOOL_ERROR_TIMEDOUT	"org.bluetool.error.Timedout"
+
 #define DBUS_HCI_SERVICE	"org.bluetool.hci"
 
 #define	DBUS_HCIMAN_IFACE	"org.bluetool.hci.manager"

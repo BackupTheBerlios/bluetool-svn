@@ -5,9 +5,11 @@
 #include "../hcidevice.h"
 
 #include <cstring>
+#include <map>
 
 #include <sys/ioctl.h>
 #include <sys/errno.h>
+#include <sys/time.h>
 
 #include <bluetooth/bluetooth.h>
 #include <bluetooth/hci.h>
@@ -15,6 +17,8 @@
 
 namespace Hci
 {
+
+typedef std::map<std::string,RemoteDevice*> RemoteDevPTable;
 
 /* internal representation of a hci request
 */
@@ -37,8 +41,25 @@ struct LocalDevice::Private
 
 	void req_timedout( Timeout& );
 
+	void link_ctl_cmd_complete( Request* req );
+
+	void link_policy_cmd_complete( Request* req );
+
+	void host_ctl_cmd_complete( Request* req );
+
+	void info_param_cmd_complete( Request* req );
+
+	void status_param_cmd_complete( Request* req );
+
+	void hci_event_received( Request* req );
+
+	void clear_cache();
+	void update_cache( const BdAddr&, u8, u8, u16 );
+	void finalize_cache();
+
 	/**/
 
+	BdAddr	ba;
 	Socket	dd;
 	int	id;
 
@@ -47,6 +68,9 @@ struct LocalDevice::Private
 	Requests	waitq;
 
 	LocalDevice*	parent;
+
+	RemoteDevPTable	inquiry_cache;
+	double		time_last_inquiry;
 };
 
 /*

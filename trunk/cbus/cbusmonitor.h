@@ -19,7 +19,7 @@ namespace DBus
 namespace DBus
 {
 
-class Monitor// : public RefCnt
+class Monitor //: public sigc::trackable // : public RefCnt
 {
 public:
 	Monitor();

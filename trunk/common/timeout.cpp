@@ -19,7 +19,7 @@ Timeout::Timeout( int interval )
 	pvt->interval = interval;
 	pvt->timeslice = interval;
 	pvt->data = NULL;
-	pvt->on = true;
+	pvt->on = interval ? true : false;
 
 	timeval started;
 	gettimeofday(&started, NULL);

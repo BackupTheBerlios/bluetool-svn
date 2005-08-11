@@ -46,6 +46,16 @@ public:
 		return ::recv(_fd, buf, len, flags);
 	}
 
+	int write( const char* buf, int len )
+	{
+		return ::write(_fd, buf, len);
+	}
+
+	int read( char* buf, int len )
+	{
+		return ::read(_fd, buf, len);
+	}
+
 	int setsockopt( int level, int optname, const char* optval, int optlen )
 	{
 		return ::setsockopt(_fd, level, optname, optval, optlen);

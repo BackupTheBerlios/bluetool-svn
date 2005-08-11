@@ -73,7 +73,7 @@ void LocalDevice::Private::open( int dev_id )
 {
 	id = dev_id;
 
-	if( dd.handle() < 0 || !dd.bind(id) )
+	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)&ba)< 0 )
 		throw Exception();
 
 	notifier.fd( dd.handle() );
@@ -89,6 +89,53 @@ void LocalDevice::Private::open( int dev_id )
 
 	if(!dd.set_filter(f))
 		throw Exception();
+}
+
+void LocalDevice::Private::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+{
+	const std::string straddr = addr.to_string();
+
+	RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
+	if( i == inquiry_cache.end() )
+	{
+		/* create new entry
+		*/
+		inquiry_cache[straddr] = new RemoteDevice(parent, addr, pscan_rpt_mode, pscan_mode, clk_offset);
+	}
+	else
+	{
+		/* update cache entry
+		*/
+		i->second->update(pscan_rpt_mode, pscan_mode, clk_offset);
+	}
+}
+
+void LocalDevice::Private::finalize_cache()
+{
+	RemoteDevPTable::iterator ri = inquiry_cache.begin();
+	while( ri != inquiry_cache.end() )
+	{
+		if(ri->second->last_updated() < time_last_inquiry)
+		{
+			delete ri->second;
+			inquiry_cache.erase(ri);
+		}
+		++ri;
+	}
+}
+
+void LocalDevice::Private::clear_cache()
+{
+	RemoteDevPTable::iterator ri = inquiry_cache.begin();
+	while( ri != inquiry_cache.end() )
+	{
+		RemoteDevPTable::iterator ti = ri;
+		ti++;
+	
+		delete ri->second;
+		inquiry_cache.erase(ri);
+		ri = ti;
+	}
 }
 
 void LocalDevice::Private::post_req( Request* req )
@@ -271,6 +318,8 @@ _writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 	{
 		if (errno == EAGAIN || errno == EINTR)
 			return;
+		else
+			throw Exception();
 	}
 	else
 	{
@@ -281,25 +330,70 @@ _writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 	}
 }
 
+static u16 get_status( Request* req )
+{
+	if(req->hr.event == EVT_CMD_STATUS)
+	{
+		evt_cmd_status* cs = (evt_cmd_status*) req->hr.rparam;
+		return cs->status;
+	}
+	else if(req->status == Request::TIMEDOUT)
+	{
+		return ETIMEDOUT;
+	}
+	return 0;
+}
+
 void LocalDevice::Private::fire_event( Request* req )
 {
 	Filter of;
 
-	EventPacket evt;
-	evt.code  = req->hr.event;
-	evt.ogf   = req->hr.ogf;
-	evt.ocf   = req->hr.ocf;
-	evt.edata = req->hr.rparam;
+	switch( req->hr.event )
+	{
+		case EVT_CMD_COMPLETE:
+		{
+			switch( req->hr.ogf )
+			{
+				case OGF_LINK_CTL:
+				{
+					link_ctl_cmd_complete(req);
+					break;
+				}
+				case OGF_LINK_POLICY:
+				{
+					link_policy_cmd_complete(req);
+					break;
+				}
+				case OGF_HOST_CTL:
+				{
+					host_ctl_cmd_complete(req);
+					break;
+				}
+				case OGF_INFO_PARAM:
+				{
+					info_param_cmd_complete(req);
+					break;
+				}
+				case OGF_STATUS_PARAM:
+				{
+					status_param_cmd_complete(req);
+					break;
+				}
+			};						
+			break;
+		}
+		case EVT_CMD_STATUS:
+		{
+			if(get_status(req) == 0)
+				goto nodel;
 
-	if( req->status == Request::TIMEDOUT )
-	{
-		parent->on_event( evt, req->cookie, true );
+			//fall thru
+		}
+		/*	command-specific events
+		*/
+		default:
+			hci_event_received(req);
 	}
-	else if( req->status == Request::COMPLETE )
-	{
-		parent->on_event( evt, req->cookie, false );
-	}
-	else goto cleanreq;
 
 	dd.get_filter(of);
 
@@ -312,10 +406,137 @@ void LocalDevice::Private::fire_event( Request* req )
 
 	dd.set_filter(of);
 
-cleanreq:
+//cleanreq:
+	parent->on_after_event(req->cookie);
 
 	waitq.erase( req->iter );
 	delete req;
+nodel:	return;
+}
+
+void LocalDevice::Private::link_ctl_cmd_complete( Request* req )
+{
+}
+
+void LocalDevice::Private::link_policy_cmd_complete( Request* req )
+{
+}
+
+void LocalDevice::Private::host_ctl_cmd_complete( Request* req )
+{
+	switch( req->hr.ocf )
+	{
+		case OCF_READ_AUTH_ENABLE:
+		{
+			u8* enable = (u8*) req->hr.rparam;
+
+			parent->on_get_auth_enable(0, req->cookie, *enable);
+			break;
+		}
+		case OCF_READ_ENCRYPT_MODE:
+		{
+			u8* mode = (u8*) req->hr.rparam;
+
+			parent->on_get_encrypt_mode(0, req->cookie, *mode);
+			break;
+		}
+		case OCF_READ_INQUIRY_SCAN_TYPE:
+		{
+			read_inquiry_scan_type_rp* r = (read_inquiry_scan_type_rp*) req->hr.rparam;
+
+			parent->on_get_scan_type(r->status,req->cookie,r->type);
+			break;
+		}
+		case OCF_READ_LOCAL_NAME:
+		{
+			read_local_name_rp* r = (read_local_name_rp*) req->hr.rparam;
+
+			parent->on_get_name(r->status,req->cookie,(char*)r->name);
+			break;
+		}
+		case OCF_READ_CLASS_OF_DEV:
+		{
+			read_class_of_dev_rp* r = (read_class_of_dev_rp*) req->hr.rparam;
+
+			parent->on_get_class(r->status,req->cookie,r->dev_class);
+			break;
+		}
+		case OCF_READ_VOICE_SETTING:
+		{
+			read_voice_setting_rp* r = (read_voice_setting_rp*) req->hr.rparam;
+
+			parent->on_get_voice_setting(r->status,req->cookie,r->voice_setting);
+			break;
+		}
+		case OCF_WRITE_INQUIRY_SCAN_TYPE:
+		{
+			parent->on_set_scan_type(0,req->cookie);
+			break;
+		}
+		case OCF_CHANGE_LOCAL_NAME:
+		{
+			parent->on_set_name(0,req->cookie);
+			break;
+		}
+	}
+}
+
+void LocalDevice::Private::info_param_cmd_complete( Request* req )
+{
+	switch( req->hr.ocf )
+	{
+		case OCF_READ_BD_ADDR:
+		{
+			read_bd_addr_rp* r = (read_bd_addr_rp*) req->hr.rparam;
+
+			char local_addr[32] = {0};
+			ba2str(&(r->bdaddr),local_addr);
+			char* local_addr_ptr = local_addr;
+
+			parent->on_get_address(r->status,req->cookie,local_addr_ptr);
+			break;
+		}
+		case OCF_READ_LOCAL_VERSION:
+		{
+			read_local_version_rp* r = (read_local_version_rp*) req->hr.rparam;
+
+			const char* hci_ver = hci_vertostr(r->hci_ver);
+			const char* lmp_ver = lmp_vertostr(r->hci_ver);
+			const char* comp_id = bt_compidtostr(r->manufacturer);
+
+			parent->on_get_version
+			(
+				r->status,
+				req->cookie,
+				hci_ver,
+				r->hci_rev,
+				lmp_ver,
+				r->lmp_subver,
+				comp_id
+			);
+			break;
+		}
+		case OCF_READ_LOCAL_FEATURES:
+		{
+			read_local_features_rp* r = (read_local_features_rp*) req->hr.rparam;
+
+			char* lmp_feat = lmp_featurestostr(r->features," ",0);
+
+			parent->on_get_features(r->status,req->cookie,lmp_feat);
+			 //todo: format this field as a string array
+
+			free(lmp_feat);
+			break;
+		}
+	}
+}
+
+void LocalDevice::Private::status_param_cmd_complete( Request* req )
+{
+}
+
+void LocalDevice::Private::hci_event_received( Request* req )
+{
 }
 
 /*
@@ -348,6 +569,11 @@ Socket& LocalDevice::descriptor()
 int LocalDevice::id() const	
 {
 	return pvt->id;
+}
+
+const BdAddr& LocalDevice::addr() const
+{
+	return pvt->ba;
 }
 
 /*
@@ -528,7 +754,7 @@ bool LocalDevice::get_iscan_enable( void* cookie, int timeout )
 
 #endif
 
-void LocalDevice::get_local_name( void* cookie, int timeout )
+void LocalDevice::get_name( void* cookie, int timeout )
 {
 	Request* req = new Request;
 	req->hr.ogf    = OGF_HOST_CTL;
@@ -542,7 +768,7 @@ void LocalDevice::get_local_name( void* cookie, int timeout )
 	pvt->post_req(req);
 }
 
-void LocalDevice::set_local_name( const char* name, void* cookie, int timeout )
+void LocalDevice::set_name( const char* name, void* cookie, int timeout )
 {
 	change_local_name_cp* cp = new change_local_name_cp;
 
@@ -653,7 +879,8 @@ void LocalDevice::get_features( void* cookie, int timeout )
 	pvt->post_req(req);
 }
 
-void LocalDevice::get_addr( void* cookie, int timeout )
+
+void LocalDevice::get_address( void* cookie, int timeout )
 {
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
@@ -696,7 +923,7 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 	req->hr.rlen   = INQUIRY_INFO_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(11000);
+	req->to.interval(20000);
 
 	pvt->post_req(req);
 }
@@ -706,7 +933,7 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 
 RemoteDevice::RemoteDevice
 (
-	LocalDevice& loc_dev,
+	LocalDevice* loc_dev,
 	const BdAddr& addr,
 	u8 pscan_rpt_mode,
 	u8 pscan_mode,
@@ -723,5 +950,17 @@ RemoteDevice::RemoteDevice
 
 RemoteDevice::~RemoteDevice()
 {}
+
+void RemoteDevice::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+{
+	page_scan_repeat_mode(pscan_rpt_mode);
+	page_scan_mode(pscan_mode);
+	clock_offset(clk_offset);
+
+	timeval now;
+	gettimeofday(&now, NULL);
+
+	_time_last_updated = now.tv_sec*1000 + now.tv_usec/1000;
+}
 
 }//namespace Hci

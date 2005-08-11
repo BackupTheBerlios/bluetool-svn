@@ -151,6 +151,7 @@ void Monitor::Private::add_timeout( DBusTimeout* dt )
 	t->data(dt);
 	t->interval(dbus_timeout_get_interval(dt));
 	t->timed_out.connect( sigc::mem_fun(*this, &Monitor::Private::timeout_ready) );
+	t->start();
 
 	cbus_dbg("adding timeout %p with interval %d", dt, t->interval());
 
