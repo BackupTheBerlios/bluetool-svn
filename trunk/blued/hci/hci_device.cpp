@@ -329,7 +329,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 
 void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 {
-	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
+	DBus::ReturnMessage* reply = new DBus::ReturnMessage (msg);
 
 	Hci::LocalDevice::start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
 }
@@ -728,6 +728,15 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 {
 }
 
+void HciRemote::CreateConnection( const DBus::CallMessage& msg )
+{
+	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
+
+	/* creates a new ACL connection, if none exists
+	*/
+//	Hci::RemoteDevice::create_connection(  );
+}
+
 void HciRemote::on_get_name
 (	
 	u16 status,
@@ -760,6 +769,16 @@ void HciRemote::on_get_clock_offset
 )
 {
 }
+
+void HciRemote::on_connection_complete
+(
+	u16 status,
+	void* cookie,
+	Hci::Connection* conn
+)
+{
+}
+
 
 #if 0
 void HciRemote::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )

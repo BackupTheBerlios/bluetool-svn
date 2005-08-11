@@ -12,12 +12,10 @@
 namespace Hci
 {
 	class LocalDevice;
-	typedef std::list<LocalDevice*> LocalDevPList;
-
-	struct RemoteInfo;
 
 	class RemoteDevice;
-	typedef std::list<RemoteDevice*> RemoteDevPList;
+
+	struct RemoteInfo;
 }
 
 #include "bdaddr.h"
@@ -89,6 +87,7 @@ public:
 	void start_inquiry( u8* lap, u32 flags, void* cookie );
 	void cancel_inquiry( void* cookie );
 
+private:
 	/*	event handlers
 	*/
 	virtual void on_get_auth_enable
@@ -202,17 +201,14 @@ public:
 
 	/*	special event handlers
 	*/
-	virtual void on_after_event( void* cookie )
-	{}
+	virtual void on_after_event( void* cookie ) = 0;
 
-	virtual RemoteDevice* on_new_cache_entry( RemoteInfo& )
-	{
-		return NULL;
-	}
+	virtual RemoteDevice* on_new_cache_entry( RemoteInfo& ) = 0;
+
+public:
+	struct Private;
 
 private:	
-
-	struct Private;
 	Private* pvt;	
 };
 
@@ -263,6 +259,22 @@ public:
 
 	void get_clock_offset( void* cookie, int timeout );
 
+	void create_connection
+	(
+		bool acl_or_sco,
+		u16 ptype,
+		bool change_role,
+		void* cookie,
+		int timeout
+	);
+
+	/*	cache managment
+	*/
+	void update( RemoteInfo& );
+
+	inline double last_updated() const;
+
+private:
 	/*	event handlers
 	*/
 	virtual void on_get_name
@@ -290,17 +302,17 @@ public:
 		void* cookie
 	){}
 
+	virtual void on_connection_complete
+	(
+		u16 status,
+		void* cookie,
+		Hci::Connection* conn
+	){}
+
+
 	/*	special event handlers
 	*/
-	virtual void on_after_event( void* cookie )
-	{}
-
-
-	/*	cache managment
-	*/
-	void update( RemoteInfo& );
-
-	inline double last_updated() const;
+	//virtual void on_after_event( void* cookie ) = 0;
 
 private:
 
@@ -308,6 +320,8 @@ private:
 
 	LocalDevice*	_local_dev;
 	double		_time_last_updated;
+
+friend struct LocalDevice::Private;
 };
 
 const BdAddr& RemoteDevice::addr() const

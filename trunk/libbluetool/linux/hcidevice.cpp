@@ -422,7 +422,7 @@ void LocalDevice::Private::fire_event( Request* req )
 
 	dd.set_filter(of);
 
-after:	switch( req->dest_type )
+/*	switch( req->dest_type )
 	{
 		case Request::LOCAL:
 		req->dest.loc->on_after_event(req->cookie);
@@ -436,7 +436,8 @@ after:	switch( req->dest_type )
 		//req->dest.con->on_after_event(req->cookie);
 		break;
 	}
-
+*/
+	parent->on_after_event(req->cookie);
 	waitq.erase( req->iter );
 	delete req;
 nodel:	return;
@@ -620,6 +621,13 @@ void LocalDevice::Private::hci_event_received( Request* req )
 
 			req->dest_type = Request::REMOTE;
 			req->dest.rem = i->second;
+			break;
+		}
+		case EVT_CONN_COMPLETE:
+		{
+			evt_conn_complete* r = (evt_conn_complete*) req->hr.rparam;
+
+	
 			break;
 		}
 	}
@@ -1030,6 +1038,17 @@ RemoteDevice::RemoteDevice
 
 RemoteDevice::~RemoteDevice()
 {}
+
+void RemoteDevice::create_connection
+(
+	bool acl_or_sco,
+	u16 ptype,
+	bool change_role,
+	void* cookie,
+	int timeout
+)
+{
+}
 
 void RemoteDevice::update( RemoteInfo& info )
 {

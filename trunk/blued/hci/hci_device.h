@@ -191,6 +191,8 @@ public:
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
+	void CreateConnection	( const DBus::CallMessage& );
+
 	/*	event handlers
 	*/
 	void on_get_name
@@ -216,6 +218,13 @@ public:
 	(
 		u16 status,
 		void* cookie
+	);
+
+	void on_connection_complete
+	(
+		u16 status,
+		void* cookie,
+		Hci::Connection* conn
 	);
 
 private:
