@@ -54,7 +54,7 @@ struct LocalDevice::Private
 	void hci_event_received( Request* req );
 
 	void clear_cache();
-	void update_cache( const BdAddr&, u8, u8, u16 );
+	void update_cache( RemoteInfo& );
 	void finalize_cache();
 
 	/**/
@@ -97,6 +97,20 @@ struct Request
 		TIMEDOUT,
 		COMPLETE
 	} status;
+
+	enum
+	{
+		LOCAL,
+		REMOTE,
+		CONNECTION,
+	} dest_type;
+
+	union
+	{
+		LocalDevice* loc;
+		RemoteDevice* rem;
+		Connection* con;
+	} dest;
 
 	/* caller tracking
 	*/

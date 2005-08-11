@@ -62,6 +62,8 @@ Request::Request()
 
 Request::~Request()
 {
+	/*	TODO: I think this leaks memory
+	*/
 	if(hr.cparam) delete[] (u8*)hr.cparam;
 	if(hr.rparam) delete[] (u8*)hr.rparam;
 }
@@ -91,22 +93,27 @@ void LocalDevice::Private::open( int dev_id )
 		throw Exception();
 }
 
-void LocalDevice::Private::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+void LocalDevice::Private::update_cache
+(
+	RemoteInfo& info
+)
 {
-	const std::string straddr = addr.to_string();
+	const std::string straddr = info.addr.to_string();
 
 	RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
 	if( i == inquiry_cache.end() )
 	{
 		/* create new entry
 		*/
-		inquiry_cache[straddr] = new RemoteDevice(parent, addr, pscan_rpt_mode, pscan_mode, clk_offset);
+		RemoteDevice* rd = parent->on_new_cache_entry(info);
+
+		if(rd)	inquiry_cache[straddr] = rd;
 	}
 	else
 	{
 		/* update cache entry
 		*/
-		i->second->update(pscan_rpt_mode, pscan_mode, clk_offset);
+		i->second->update(info);
 	}
 }
 
@@ -348,6 +355,9 @@ void LocalDevice::Private::fire_event( Request* req )
 {
 	Filter of;
 
+	req->dest_type = Request::LOCAL; //this is the default
+	req->dest.loc = parent;
+
 	switch( req->hr.event )
 	{
 		case EVT_CMD_COMPLETE:
@@ -384,15 +394,21 @@ void LocalDevice::Private::fire_event( Request* req )
 		}
 		case EVT_CMD_STATUS:
 		{
-			if(get_status(req) == 0)
+			u16 status = get_status(req);
+
+			if(!status)	//no problems
 				goto nodel;
 
-			//fall thru
+			//parent->on_status_failed(status, req->cookie);
+			//goto after;
+			break;
 		}
 		/*	command-specific events
 		*/
 		default:
+		{
 			hci_event_received(req);
+		}
 	}
 
 	dd.get_filter(of);
@@ -406,8 +422,20 @@ void LocalDevice::Private::fire_event( Request* req )
 
 	dd.set_filter(of);
 
-//cleanreq:
-	parent->on_after_event(req->cookie);
+after:	switch( req->dest_type )
+	{
+		case Request::LOCAL:
+		req->dest.loc->on_after_event(req->cookie);
+		break;
+
+		case Request::REMOTE:
+		req->dest.rem->on_after_event(req->cookie);
+		break;
+
+		case Request::CONNECTION:
+		//req->dest.con->on_after_event(req->cookie);
+		break;
+	}
 
 	waitq.erase( req->iter );
 	delete req;
@@ -537,6 +565,64 @@ void LocalDevice::Private::status_param_cmd_complete( Request* req )
 
 void LocalDevice::Private::hci_event_received( Request* req )
 {
+	switch(req->hr.event)
+	{
+		case EVT_INQUIRY_RESULT:
+		{
+			inquiry_info* r = (inquiry_info*) req->hr.rparam;
+
+			BdAddr addr (r->bdaddr.b);
+
+			RemoteInfo info =
+			{
+				addr,
+				r->pscan_rep_mode,
+				r->pscan_period_mode,
+				r->pscan_mode,
+				{
+					r->dev_class[0],
+					r->dev_class[1],
+					r->dev_class[2],
+				},
+				r->clock_offset
+			};
+
+			update_cache(info);
+			break;
+		}
+		case EVT_INQUIRY_COMPLETE:
+		{
+			finalize_cache();
+
+			//u16* status = (u16*) req->hr.rparam;
+
+			parent->on_inquiry_complete(0, req->cookie);
+			break;
+		}
+		case EVT_REMOTE_NAME_REQ_COMPLETE:
+		{
+			evt_remote_name_req_complete* r = (evt_remote_name_req_complete*) req->hr.rparam;
+
+			char straddr[18] = {0};
+
+			ba2str(&(r->bdaddr),straddr);
+
+			RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
+
+			if( i != inquiry_cache.end() )
+			{
+				i->second->on_get_name(r->status, req->cookie, (char*)r->name);
+			}
+			else
+			{
+				hci_dbg("remote name %s from non cached device %s!",r->name, straddr);
+			}
+
+			req->dest_type = Request::REMOTE;
+			req->dest.rem = i->second;
+			break;
+		}
+	}
 }
 
 /*
@@ -916,7 +1002,7 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 	Request* req = new Request;
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_INQUIRY;
-	req->hr.event  = EVT_INQUIRY_RESULT;
+	req->hr.event  = EVT_INQUIRY_COMPLETE;
 	req->hr.cparam = cp;
 	req->hr.clen   = INQUIRY_CP_SIZE;
 	req->hr.rparam = NULL;
@@ -934,15 +1020,9 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 RemoteDevice::RemoteDevice
 (
 	LocalDevice* loc_dev,
-	const BdAddr& addr,
-	u8 pscan_rpt_mode,
-	u8 pscan_mode,
-	u16 clk_offset
+	RemoteInfo& info
 )
-:	_addr(addr),
-	_pscan_rpt_mode(pscan_rpt_mode),
-	_pscan_mode(pscan_mode),
-	_clk_offset(clk_offset),
+:	_info(info),
 	_local_dev(loc_dev)
 {
 
@@ -951,11 +1031,9 @@ RemoteDevice::RemoteDevice
 RemoteDevice::~RemoteDevice()
 {}
 
-void RemoteDevice::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
+void RemoteDevice::update( RemoteInfo& info )
 {
-	page_scan_repeat_mode(pscan_rpt_mode);
-	page_scan_mode(pscan_mode);
-	clock_offset(clk_offset);
+	_info = info;
 
 	timeval now;
 	gettimeofday(&now, NULL);

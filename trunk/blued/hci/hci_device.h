@@ -156,18 +156,17 @@ private:
 		const char* features
 	);
 
+	void on_inquiry_complete
+	(
+		u16 status,
+		void* cookie
+	);
+
 	/*	special handlers
 	*/
 	void on_after_event( void* cookie );
 
-	Hci::RemoteDevice* on_new_remote
-	(
-		Hci::LocalDevice* local_dev,
-		const BdAddr& addr,
-		u8 pscan_rpt_mode,
-		u8 pscan_mode,
-		u16 clk_offset
-	);
+	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
 
 friend class HciRemote;
 friend class HciConnection;
@@ -180,12 +179,12 @@ class HciRemote : public Hci::RemoteDevice, public DBus::LocalInterface, public 
 public:
 	HciRemote
 	( 
-		HciDevice* parent,
-		const BdAddr& addr,
-		u8 pscan_rpt_mode,
-		u8 pscan_mode,
-		u16 clk_offset
+		const char* obj_name,
+		Hci::LocalDevice* parent,
+		Hci::RemoteInfo& info
 	);
+
+	~HciRemote();
 
 	/*	exported methods
 	*/

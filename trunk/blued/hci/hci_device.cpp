@@ -335,13 +335,53 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
 
 	Hci::LocalDevice::start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
-#if 0
-	timeval now;
-	gettimeofday(&now, NULL);
-
-	_time_last_inquiry = now.tv_sec*1000 + now.tv_usec/1000.0;
-#endif
 }
+
+/*	signals
+*/
+
+void HciDevice::DeviceInRange( const HciRemote& hr )
+{
+	/* todo: I don't like this way of sending signals
+	*/
+	DBus::SignalMessage sig
+	(
+		oname().c_str(),
+		iname().c_str(),
+		"DeviceInRange"
+	);
+
+	const char* name = hr.oname().c_str();
+
+	sig.append(
+		DBUS_TYPE_STRING, &(name),
+		DBUS_TYPE_INVALID
+	);
+
+	conn().send(sig);
+}
+
+void HciDevice::DeviceOutOfRange( const HciRemote& hr )
+{
+	/* todo: I don't like this way of sending signals
+	*/
+	DBus::SignalMessage sig
+	(
+		oname().c_str(),
+		iname().c_str(),
+		"DeviceOutOfRange"
+	);
+
+	const char* name = hr.oname().c_str();
+
+	sig.append(
+		DBUS_TYPE_STRING, &(name),
+		DBUS_TYPE_INVALID
+	);
+
+	conn().send(sig);
+}
+
 #if 0
 void HciDevice::update_cache( const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
 {
@@ -613,6 +653,21 @@ void HciDevice::on_get_features
 	);
 }
 
+void HciDevice::on_inquiry_complete
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+/*	special handlers
+*/
 void HciDevice::on_after_event( void* cookie )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
@@ -623,51 +678,39 @@ void HciDevice::on_after_event( void* cookie )
 	delete reply;
 }
 
-
-/*	special handlers
-*/
-Hci::RemoteDevice* HciDevice::on_new_remote
+Hci::RemoteDevice* HciDevice::on_new_cache_entry
 (
-	Hci::LocalDevice* local_dev,
-	const BdAddr& addr,
-	u8 pscan_rpt_mode,
-	u8 pscan_mode,
-	u16 clk_offset
+	Hci::RemoteInfo& info
 )
 {
-	return new HciRemote((HciDevice*)local_dev,addr,pscan_rpt_mode,pscan_mode,clk_offset);
+	std::string rem_name = oname() + DBUS_HCIREM_SUBPATH + info.addr.to_string();
+
+	HciRemote* hr = new HciRemote(rem_name.c_str(),this,info);
+
+	this->DeviceInRange(*hr);
+
+	return hr;
 }
 
 /*	remote device
 */
 
-char __hci_remote_name[256];
-
-const char* __remote_name( const HciDevice* parent, const BdAddr& addr )
-{
-	memset(__hci_remote_name, 0, 256);
-
-	/* that's UGLY!
-	*/
-	strncpy(__hci_remote_name,
-		(std::string(
-			  parent->oname()
-			+ DBUS_HCIREM_SUBPATH
-			+ addr.to_string()
-		)).c_str(),
-		256
-	);
-	return __hci_remote_name;
-}
-
-HciRemote::HciRemote( HciDevice* parent, const BdAddr& addr, u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
-:	Hci::RemoteDevice( (Hci::LocalDevice*)parent, addr, pscan_rpt_mode, pscan_mode, clk_offset ),
+HciRemote::HciRemote
+(
+	const char* obj_name,
+	Hci::LocalDevice* parent,
+	Hci::RemoteInfo& info
+)
+:	Hci::RemoteDevice( parent, info ),
 	DBus::LocalInterface(DBUS_HCIREM_IFACE),
-	DBus::LocalObject( __remote_name(parent, addr), DBus::Connection::SystemBus() )
+	DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
 	register_method( HciRemote, SetProperty );
 }
+
+HciRemote::~HciRemote()
+{}
 
 void HciRemote::GetProperty( const DBus::CallMessage& msg )
 {
@@ -675,6 +718,39 @@ void HciRemote::GetProperty( const DBus::CallMessage& msg )
 
 
 void HciRemote::SetProperty( const DBus::CallMessage& msg )
+{
+}
+
+void HciRemote::on_get_name
+(	
+	u16 status,
+	void* cookie,
+	const char* name
+)
+{
+}
+
+void HciRemote::on_get_version
+(
+	u16 status,
+	void* cookie
+)
+{
+}
+
+void HciRemote::on_get_features
+(
+	u16 status,
+	void* cookie
+)
+{
+}
+
+void HciRemote::on_get_clock_offset
+(
+	u16 status,
+	void* cookie
+)
 {
 }
 

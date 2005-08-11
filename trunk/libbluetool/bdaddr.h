@@ -9,13 +9,14 @@ struct BdAddr
 {
 
 public:
+	BdAddr( );
 
-	//BdAddr(const char* str);
+	BdAddr( const u8* );
 
-	void set(const char* str);
+	void set( const char* str );
 
-	bool operator == (const BdAddr& ba) const;
-	ushort operator [] (uint i) const;
+	bool operator == ( const BdAddr& ba ) const;
+	ushort operator [] ( uint i ) const;
 
 	const std::string to_string() const;
 

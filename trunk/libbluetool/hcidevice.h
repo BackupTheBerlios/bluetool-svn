@@ -14,6 +14,8 @@ namespace Hci
 	class LocalDevice;
 	typedef std::list<LocalDevice*> LocalDevPList;
 
+	struct RemoteInfo;
+
 	class RemoteDevice;
 	typedef std::list<RemoteDevice*> RemoteDevPList;
 }
@@ -30,12 +32,12 @@ class LocalDevice : public RefCnt
 {
 public:
 
-/*	device enumeration
-*/	
+	/*	device enumeration
+	*/	
 	//static LocalDevices enumerate();
 
-/*	device control
-*/	
+	/*	device control
+	*/	
 	static void up( const char* name );
 	static void down( const char* name );
 	static void reset( const char* name );
@@ -50,14 +52,14 @@ public:
 
 	Socket& descriptor();
 
-/*	direct accessors
-*/
+	/*	direct accessors
+	*/
 	const BdAddr& addr() const;
 
 	int id() const;
 
-/*	device properties
-*/
+	/*	device properties
+	*/
 	void get_auth_enable( void* cookie, int timeout );
 	void set_auth_enable( u8, void* cookie, int timeout );
 
@@ -82,13 +84,13 @@ public:
 
 	void get_features( void* cookie, int timeout );
 
-/*	device operations
-*/
+	/*	device operations
+	*/
 	void start_inquiry( u8* lap, u32 flags, void* cookie );
 	void cancel_inquiry( void* cookie );
 
-/*	event handlers
-*/
+	/*	event handlers
+	*/
 	virtual void on_get_auth_enable
 	(
 		u16 status,
@@ -192,22 +194,18 @@ public:
 		const char* features
 	){}
 
+	virtual void on_inquiry_complete
+	(
+		u16 status,
+		void* cookie
+	){}
+
 	/*	special event handlers
 	*/
 	virtual void on_after_event( void* cookie )
 	{}
 
-
-	/*	special handlers
-	*/
-	virtual RemoteDevice* on_new_remote
-	(
-		LocalDevice* local_dev,
-		const BdAddr& addr,
-		u8 pscan_rpt_mode,
-		u8 pscan_mode,
-		u16 clk_offset
-	)
+	virtual RemoteDevice* on_new_cache_entry( RemoteInfo& )
 	{
 		return NULL;
 	}
@@ -220,6 +218,15 @@ private:
 
 /*
 */
+struct RemoteInfo
+{
+	BdAddr addr;
+	u8     pscan_rpt_mode;
+	u8     pscan_per_mode;
+	u8     pscan_mode;
+	u8     dev_class[3];
+	u16    clk_offset;
+};
 
 class RemoteDevice
 {
@@ -228,16 +235,13 @@ public:
 	RemoteDevice
 	(
 		LocalDevice* local_dev,
-		const BdAddr& addr,
-		u8 pscan_rpt_mode,
-		u8 pscan_mode,
-		u16 clk_offset
+		RemoteInfo& info
 	);
 
 	virtual ~RemoteDevice();
 
-/*	direct accessors
-*/
+	/*	direct accessors
+	*/
 	inline const BdAddr& addr() const;
 
 	inline u8 page_scan_repeat_mode() const;
@@ -249,8 +253,8 @@ public:
 	inline u16 clock_offset() const;
 	inline void clock_offset( u8 );
 
-/*	device properties
-*/
+	/*	device properties
+	*/
 	void get_name( void* cookie, int timeout );
 
 	void get_version( void* cookie, int timeout );	//needs a connection
@@ -259,8 +263,8 @@ public:
 
 	void get_clock_offset( void* cookie, int timeout );
 
-/*	event handlers
-*/
+	/*	event handlers
+	*/
 	virtual void on_get_name
 	(	
 		u16 status,
@@ -286,25 +290,29 @@ public:
 		void* cookie
 	){}
 
-/*	cache managment
-*/
-	void update(u8,u8,u16);
+	/*	special event handlers
+	*/
+	virtual void on_after_event( void* cookie )
+	{}
+
+
+	/*	cache managment
+	*/
+	void update( RemoteInfo& );
 
 	inline double last_updated() const;
 
 private:
 
-	BdAddr          _addr;
-	u8		_pscan_rpt_mode;
-	u8		_pscan_mode;
-	u16		_clk_offset;
+	RemoteInfo	_info;
+
 	LocalDevice*	_local_dev;
 	double		_time_last_updated;
 };
 
 const BdAddr& RemoteDevice::addr() const
 {
-	return _addr;
+	return _info.addr;
 }
 
 double RemoteDevice::last_updated() const
@@ -314,30 +322,30 @@ double RemoteDevice::last_updated() const
 
 u8 RemoteDevice::page_scan_repeat_mode() const
 {
-	return _pscan_rpt_mode;
+	return _info.pscan_rpt_mode;
 }
 
 void RemoteDevice::page_scan_repeat_mode( u8 prm )
 {
-	_pscan_rpt_mode = prm;
+	_info.pscan_rpt_mode = prm;
 }
 
 u8 RemoteDevice::page_scan_mode() const
 {
-	return _pscan_mode;
+	return _info.pscan_mode;
 }
 void RemoteDevice::page_scan_mode( u8 pm )
 {
-	_pscan_mode = pm;
+	_info.pscan_mode = pm;
 }
 
 u16 RemoteDevice::clock_offset() const
 {
-	return _clk_offset;
+	return _info.clk_offset;
 }
 void RemoteDevice::clock_offset( u8 co )
 {
-	_clk_offset = co;
+	_info.clk_offset = co;
 }
 
 }//namespace Hci
