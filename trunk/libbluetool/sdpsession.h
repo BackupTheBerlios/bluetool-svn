@@ -5,6 +5,12 @@
 #include "../common/fdnotifier.h"
 #include "../common/timeout.h"
 #include "../common/bytevector.h"
+#include "../common/unixsocket.h"
+
+namespace Sdp
+{
+	class Session;
+}
 
 #include "bdaddr.h"
 #include "l2csocket.h"
@@ -13,23 +19,27 @@
 
 namespace Sdp
 {
-	class Session;
-}
-
-namespace Sdp
-{
 
 class Session
 {
 public:
+	Session();
 
 	Session( BdAddr& src, BdAddr& dest );
 
-	void start_service_search( DataElementList& service_pattern );
+	~Session();
 
-	void start_attribute_search( u32 service_handle, DataElementList& attributes );
+	void start_service_search( DataElementSeq& service_pattern );
 
-	void start_attr_serv_search( DataElementList& service_pattern, DataElementList& attributes );
+	void start_attribute_search( u32 service_handle, DataElementSeq& attributes );
+
+	void start_attr_serv_search( DataElementSeq& service_pattern, DataElementSeq& attributes );
+
+	void start_complete_search();
+
+private:
+
+	SdpEvent on_response;
 
 private:
 

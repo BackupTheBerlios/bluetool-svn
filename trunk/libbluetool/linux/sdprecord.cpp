@@ -1,22 +1,28 @@
 #include "../sdperror.h"
-#include "../sdprecord.h"
-
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/sdp.h>
-#include <bluetooth/sdp_lib.h>
+#include "sdprecord_p.h"
 
 namespace Sdp
 {
 
-struct DataElement::Private
+sdp_data_t* DataElement::Private::new_seq( DataElementSeq& des )
 {
-	sdp_data_t* elem;
-	bool alloc;
-};
+	sdp_data_t* seq = sdp_data_alloc(SDP_SEQ8, NULL);
+
+	DataElementSeq::iterator i = des.begin();
+	while(i != des.end())
+	{
+		sdp_seq_append(seq,i->pvt->elem);
+		++i;
+	}
+	return seq;
+}
+
+/*
+*/
 
 DataElement::DataElement()
 {
-	pvt = new Private;
+	pvt = NULL;
 }
 
 DataElement::DataElement( const DataElement& de )
@@ -24,7 +30,9 @@ DataElement::DataElement( const DataElement& de )
 	pvt = new Private;
 	pvt->elem = sdp_data_alloc(SDP_DATA_NIL, NULL);
 	pvt->alloc = true;
-	memcpy(&(pvt->elem), &(de.pvt->elem), sizeof(sdp_data_t));	
+	memcpy(pvt->elem, de.pvt->elem, sizeof(sdp_data_t));
+
+	//TODO: this is BAD for copying strings or sequences
 }
 
 DataElement::~DataElement()
@@ -44,13 +52,21 @@ const DataElement& DataElement::operator = ( const DataElement& de )
 	}
 	return *this;
 }
-
+/*
 DataElement::operator Bool&()
 {
 	if( pvt->elem->dtd != SDP_BOOL )
 		throw Error("type mismatch");
 
 	return static_cast<Bool&>(*this);
+}
+
+DataElement::operator U32&()
+{
+	if( pvt->elem->dtd != SDP_UINT32 )
+		throw Error("type mismatch");
+
+	return static_cast<U32&>(*this);
 }
 
 DataElement::operator String&()
@@ -81,12 +97,13 @@ DataElement::operator UUID&()
 	}
 	return static_cast<UUID&>(*this);
 }
-
+*/
 /*	booleans
 */
 
 Bool::Bool( bool b )
 {
+	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_BOOL,&b);
 }
@@ -101,11 +118,32 @@ void Bool::operator = ( bool b )
 	pvt->elem->val.uint8 = (u8)b;
 }
 
+/*	various format integers
+*/
+
+U32::U32( u32 u )
+{
+	pvt = new Private;
+	pvt->alloc = true;
+	pvt->elem = sdp_data_alloc(SDP_UINT32, &u);
+}
+
+u32 U32::to_u32()
+{
+	return pvt->elem->val.uint32;
+}
+
+void U32::operator = ( u32 u )
+{
+	pvt->elem->val.uint32 = u;
+}
+
 /*	strings
 */
 
 String::String( const char* string )
 {
+	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_TEXT_STR16, string);
 }
@@ -127,35 +165,34 @@ void String::operator = ( std::string& s )
 
 UUID::UUID( u16 value )
 {
+	pvt = new Private;
 	pvt->alloc = true;
-	pvt->elem = (sdp_data_t*)malloc(sizeof(sdp_data_t));
+	pvt->elem = sdp_data_alloc(SDP_UUID16, &value);
 
-	uuid_t tmp;
-	sdp_uuid16_create( &tmp, value);
-	sdp_uuid16_to_uuid128( &(pvt->elem->val.uuid), &tmp );
+//	sdp_uuid16_to_uuid128( &(pvt->elem->val.uuid), &tmp );
 }
 
 UUID::UUID( u32 value )
 {
+	pvt = new Private;
 	pvt->alloc = true;
-	pvt->elem = (sdp_data_t*)malloc(sizeof(sdp_data_t));
+	pvt->elem = sdp_data_alloc(SDP_UUID32, &value);
 
-	uuid_t tmp;
-	sdp_uuid32_create( &tmp, value);
 	//sdp_uuid32_to_uuid128( &(pvt->elem->val.uuid), &tmp ); //todo
 }
 
 UUID::UUID( u128 value )
 {
+	pvt = new Private;
 	pvt->alloc = true;
-	pvt->elem = (sdp_data_t*)malloc(sizeof(sdp_data_t));
+	pvt->elem = sdp_data_alloc(SDP_UUID128,&value);
 
 	sdp_uuid128_create( &(pvt->elem->val.uuid), value);
 }
 
 bool UUID::operator == ( const UUID& u )
 {
-	return sdp_uuid128_cmp( &(pvt->elem->val.uuid), &(u.pvt->elem->val.uuid) );
+	return sdp_uuid128_cmp( &(pvt->elem->val.uuid), &(u.pvt->elem->val.uuid) ); //TODO: compare types
 }
 
 std::string UUID::to_string()

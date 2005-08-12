@@ -8,6 +8,7 @@ namespace DBus
 {
 
 static Connection* g_system_bus = NULL;
+static Connection* g_activation_bus = NULL;	//TODO: that's a BAAD thing
 
 Connection& Connection::SystemBus()
 {
@@ -21,6 +22,14 @@ Connection& Connection::SystemBus()
 Connection Connection::SessionBus()
 {
 	return Connection(DBUS_BUS_SESSION);
+}
+
+Connection& Connection::ActivationBus()
+{
+	if(!g_activation_bus)
+		g_activation_bus = new Connection(DBUS_BUS_STARTER);
+
+	return *g_activation_bus;
 }
 
 Connection::Connection( DBusBusType type )
@@ -176,6 +185,16 @@ bool Connection::has_name( const char* name )
 #endif
 
 	if(e) throw e;	//hmmm, do we need that ??
+	return b;
+}
+
+bool Connection::start_service( const char* name, u32 flags )
+{
+	Error e;
+
+	bool b = dbus_bus_start_service_by_name(_connection,name,flags,NULL,e);
+
+	if(e) throw e;
 	return b;
 }
 

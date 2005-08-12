@@ -32,6 +32,8 @@ public:
 
 	static Connection SessionBus();
 
+	static Connection& ActivationBus();
+
 	Connection( DBusBusType bustype );
 
 	Connection( const char* address, bool priv = false );
@@ -69,6 +71,8 @@ public:
 	void request_name( const char* name, int flags = 0 );
 
 	bool has_name( const char* name );
+
+	bool start_service( const char* name, u32 flags );
 
 private:
 

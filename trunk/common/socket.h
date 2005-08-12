@@ -66,10 +66,10 @@ public:
 		return ::fcntl(_fd, F_GETFL, 0);
 	}
 
-	int set_blocking( bool block )
+	bool set_blocking( bool block )
 	{
 		int fl = block ? flags() | O_NONBLOCK : flags() & ~O_NONBLOCK;
-		return ::fcntl(_fd, F_SETFL, fl);
+		return ::fcntl(_fd, F_SETFL, fl) < 0;
 	}
 
 protected:

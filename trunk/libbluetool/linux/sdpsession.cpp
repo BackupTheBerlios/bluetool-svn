@@ -10,6 +10,7 @@
 
 #include "../sdpdebug.h"
 #include "../sdpsession.h"
+#include "sdprecord_p.h"
 
 namespace Sdp
 {
@@ -18,8 +19,9 @@ struct Session::Private
 {
 	BdAddr src;
 	BdAddr dst;
-	L2CapSocket sock;
 	FdNotifier notifier;
+	Socket* sock;
+	bool local;
 
 	/* read buffer
 	*/
@@ -55,6 +57,16 @@ struct Session::Private
 	void start_send();
 	int save_and_cstate();
 	void ensure_connected();
+
+	Private( Session* s )
+	{
+		state = Private::DISCONNECTED;
+		sock = NULL;
+		sess = s;
+
+		notifier.can_read.connect( sigc::mem_fun(this, &Private::can_read) );
+		notifier.can_write.connect( sigc::mem_fun(this, &Private::can_write) );
+	}
 };
 
 void Session::Private::start_send()
@@ -76,12 +88,39 @@ void Session::Private::ensure_connected()
 	if( state == CONNECTED )
 		return;
 
-	sock.close();
+	delete sock;
 
 	state = INIT;
 
-	if( !sock.bind(src) || sock.set_blocking(false)< 0 || !sock.connect(dst,0/*TODO:flags*/) )
-		throw Error();
+	if( local )
+	{
+		UnixSocket* usock = new UnixSocket;
+
+		if( !usock->connect(SDP_UNIX_PATH) )
+		{
+			delete usock;
+			throw Error();
+		}
+
+		sock = usock;
+	}
+	else
+	{
+		L2CapSocket* lsock = new L2CapSocket;
+
+		if
+		(    !lsock->bind(src)
+		  || !lsock->set_blocking(false)
+		  || !lsock->connect(dst,0/*TODO:flags*/)
+		)
+		{
+			delete lsock;
+			throw Error();
+		}
+
+		sock = lsock;
+	}
+	notifier.fd(sock->handle());
 }
 
 int Session::Private::save_and_cstate()
@@ -141,7 +180,7 @@ void Session::Private::can_read( FdNotifier& )
 		case WAITING:
 		{
 			u8 sf[64];
-			int len = sock.recv((char*)sf, sizeof(sf));
+			int len = sock->recv((char*)sf, sizeof(sf));
 			if( len < 0 )
 			{	
 				if( errno != EAGAIN && errno != EINTR )
@@ -200,7 +239,7 @@ void Session::Private::can_write( FdNotifier& )
 			{
 				/* append arguments
 				*/
-				if(cstate.empty())
+				if(!cstate.empty())
 				{
 					/* parse arglist
 					*/
@@ -221,7 +260,7 @@ void Session::Private::can_write( FdNotifier& )
 				req->plen = obuf.size() - sizeof(sdp_pdu_hdr_t);
 			}
 
-			int len = sock.send((char*)&obuf[obytes], obuf.size() - obytes);
+			int len = sock->send((char*)&obuf[obytes], obuf.size() - obytes);
 			if( len < 0 )
 			{
 				if( errno != EAGAIN && errno != EINTR )
@@ -254,15 +293,27 @@ w_disconnected:	case DISCONNECTED:
 	};
 }
 
-Session::Session( BdAddr& src, BdAddr& dest )
+Session::Session()
 {
-	pvt = new Private;
-	pvt->sess = this;
-	pvt->src = src;
-	pvt->dst = dest;
+	pvt = new Private(this);
+	pvt->local = true;
 }
 
-void Session::start_service_search( DataElementList& service_pattern )
+Session::Session( BdAddr& src, BdAddr& dest )
+{
+	pvt = new Private(this);
+	pvt->src = src;
+	pvt->dst = dest;
+	pvt->local = false;
+}
+
+Session::~Session()
+{
+	delete pvt->sock;
+	delete pvt;
+}
+
+void Session::start_service_search( DataElementSeq& service_pattern )
 {
 	if( pvt->state != Session::Private::IDLE )
 		throw Error(EAGAIN);
@@ -280,6 +331,51 @@ void Session::start_service_search( DataElementList& service_pattern )
 	pvt->start_send();
 }
 
+void Session::start_attr_serv_search( DataElementSeq& service_pattern, DataElementSeq& attributes )
+{
+	//if( pvt->state != Session::Private::IDLE )
+	//	throw Error(EAGAIN);
+
+	sdp_data_t* svc_list = DataElement::Private::new_seq(service_pattern);
+
+	sdp_data_t* attr_list = DataElement::Private::new_seq(attributes);
+
+	pvt->obuf.resize(SDP_REQ_BUFFER_SIZE);
+
+	sdp_buf_t buf;
+	buf.data = (char*)&(pvt->obuf[0]);
+	buf.data_size = sizeof(sdp_pdu_hdr_t);
+	buf.buf_size = pvt->obuf.size();
+
+	sdp_append_to_pdu(&buf,svc_list);
+	sdp_append_to_pdu(&buf,attr_list);
+
+	pvt->req = (sdp_pdu_hdr_t*)buf.data;
+	pvt->req->pdu_id = SDP_SVC_SEARCH_ATTR_REQ;
+
+	pvt->start_send();
+
+	free(svc_list);
+	free(attr_list);
+}
+
+/*	search for ALL attributes in ALL services
+*/
+void Session::start_complete_search()
+{
+	u16 public_group = PUBLIC_BROWSE_GROUP;
+
+	Sdp::UUID u1 = Sdp::UUID(public_group);
+	Sdp::UUID u2 (u1);
+
+	DataElementSeq svcs;
+	svcs.push_back( u2 );
+
+	DataElementSeq attrs;
+	attrs.push_back( Sdp::U32(0x0000FFFF) );
+
+	start_attr_serv_search(svcs,attrs);
+}
 
 
 }//namespace Sdp

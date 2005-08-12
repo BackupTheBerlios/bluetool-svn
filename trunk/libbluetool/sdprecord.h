@@ -4,22 +4,30 @@
 #include "../common/types.h"
 #include "../common/refcnt.h"
 
+#include <sigc++/sigc++.h>
 #include <list>
 #include <string>
 
 namespace Sdp
 {
 	class DataElement;	
-	typedef std::list<DataElement> DataElementList;
+	typedef std::list<DataElement> DataElementSeq;
+
+	typedef sigc::signal<void, u16, DataElementSeq&> SdpEvent;
 
 	class Bool;
+	class U32;
+	//typedef std::list<U32> U32Seq;
 	class String;
 	class UUID;
+	//typedef std::list<UUID> UUIDSeq;
 
 	class Attribute;
 
-	class Record;	//there's no AttributeList, since we've records :)
+	class Record;
 }
+
+#include "sdpsession.h"
 
 /*
 */
@@ -29,21 +37,24 @@ namespace Sdp
 
 class DataElement
 {
-public:
+protected:
 	DataElement();
+public:
 	DataElement( const DataElement& );
-	~DataElement();
+	virtual ~DataElement();
 
 	const DataElement& operator = ( const DataElement& );
 
-	operator Bool&();
+/*	operator Bool&();
+	operator U32&();
 	operator String&();
 	operator UUID&();
-
-protected:
+*/
 	struct Private;
+protected:
 	Private* pvt;
 
+friend class Session;
 friend class Record;
 };
 
@@ -55,6 +66,16 @@ public:
 	bool to_bool();
 
 	void operator = ( bool b );
+};
+
+class U32 : public DataElement
+{
+public:
+	U32( u32 );
+
+	u32 to_u32();
+
+	void operator = ( u32 u );
 };
 
 class String : public DataElement

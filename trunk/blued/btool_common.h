@@ -21,4 +21,8 @@
 #define SDP_CLIENT_PATH		"/org/bluetool/sdp/client"
 #define SDP_CLIENT_IFACE	"org.bluetool.sdp.client"
 
+#define BTOOL_SERVICE_SUBPATH	"/org/bluetool/services/"//+ service_name
+#define BTOOL_SERVICE_IFACE	"org.bluetool.service"
+#define BTOOL_SERVICE_ROOT	"org.bluetool.services."//+ service_name
+
 #endif//__BTOOL_COMMON_H

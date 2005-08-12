@@ -1,6 +1,8 @@
 #ifndef __UNIX_SOCKET_H
 #define __UNIX_SOCKET_H
 
+#include <sys/un.h>
+
 #include "socket.h"
 
 class UnixSocket : public Socket
