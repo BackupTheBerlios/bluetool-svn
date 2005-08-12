@@ -13,7 +13,7 @@
 #define DBUS_HCIDEV_PATH	"/org/bluetool/hci/"//+ hciX
 
 #define DBUS_HCIREM_IFACE	"org.bluetool.hci.remote"
-#define DBUS_HCIREM_SUBPATH	/* /org/bluetool/hci/hciX + */ "/cached/" /* + 00:11:AA:22:BB:CC */
+#define DBUS_HCIREM_SUBPATH	/* /org/bluetool/hci/hciX + */ "/cached/" /* + 00_11_AA_22_BB_CC */
 
 #define DBUS_HCICONN_IFACE	"org.bluetool.hci.connection"
 #define DBUS_HCICONN_SUBPATH	/* /org/bluetool/hci/hciX + */ "/connections/" /* + 0x12AC */

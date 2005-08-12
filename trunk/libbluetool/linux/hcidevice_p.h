@@ -31,6 +31,7 @@ typedef std::list<Request*> Requests;
 
 struct LocalDevice::Private
 {
+	void init( int dev_id );
 	void open( int dev_id );
 
 	void post_req( Request* );

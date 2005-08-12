@@ -9,6 +9,8 @@ namespace Hci
 {
 	class Connection;
 
+	struct ConnInfo;
+
 	typedef std::map<u16,Connection*> ConnPTable;
 }
 
@@ -17,20 +19,21 @@ namespace Hci
 namespace Hci
 {
 
+struct ConnInfo
+{
+	u16 handle;
+	u8  link_type;
+	u8  encrypt_mode;
+};
+
 class Connection
 {
-private:
-	/* private ctor, this means you can't create a connection directly
-	   but you have to ask the Hci::RemoteDevice to do that for you
-	*/
+protected:
+
 	Connection
 	(
-		LocalDevice& from,
-		RemoteDevice& to,
-		u8 proto,
-		u16 type,
-		u8 encrypt,
-		bool change_roles
+		RemoteDevice* to,
+		ConnInfo& info
 	);
 
 public:
@@ -39,9 +42,7 @@ public:
 
 	/*	accessors
 	*/
-	inline LocalDevice& from();
-
-	inline RemoteDevice& to();
+	inline RemoteDevice* to();
 
 	inline u16 handle();
 
@@ -137,26 +138,20 @@ public:
 	*/
 
 private:
-	LocalDevice&	_from;
-	RemoteDevice&	_to;
-	u16		_handle;
+	RemoteDevice*	_to;
+	ConnInfo	_info;
 
 friend class RemoteDevice;
 };
 
-LocalDevice& Connection::from()
-{
-	return _from;
-}
-
-RemoteDevice& Connection::to()
+RemoteDevice* Connection::to()
 {
 	return _to;
 }
 
 u16 Connection::handle()
 {
-	return _handle;
+	return _info.handle;
 }
 
 }//namespace Hci

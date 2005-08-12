@@ -1,12 +1,12 @@
 #ifndef __BTOOL_HCI_SERVICE_H
 #define __BTOOL_HCI_SERVICE_H
 
+#include "../../libbluetool/hcisocket.h"
 #include "../../cbus/cbus.h"
-#include "../../common/eventloop.h"
+#include "../../common/fdnotifier.h"
 
 #include "../btool_common.h"
 
-#include "hci_tracker.h"
 #include "hci_device.h"
 
 class HciManager : public DBus::LocalInterface, public DBus::LocalObject
@@ -32,10 +32,15 @@ private:
 
 private:
 
-	HciDevice* get_device( const char* name );
+	HciDevice* get_device( int );
+
+	void on_new_event( FdNotifier& );
 
 private:
-	HciTracker _tracker;
+
+	FdNotifier	_notifier;
+	Hci::Socket	_evt_socket;
+	HciDevicePTable	_devices;
 };
 
 class HciService

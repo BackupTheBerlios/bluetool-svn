@@ -14,21 +14,21 @@
 #define	HCI_TIMEOUT 120000
 
 class HciDevice;
-typedef std::map<std::string, HciDevice*>	HciDevicePTable;
+typedef std::map<int, HciDevice*>	HciDevicePTable;
 
 class HciRemote;
 //typedef std::map<std::string, HciRemote*>	HciRemotePTable;
 
 class HciConnection;
-typedef std::map<u16, HciConnection*>		HciConnPTable;
+//typedef std::map<u16, HciConnection*>		HciConnPTable;
 
 
 /*	local HCI device
 */
 class HciDevice : private Hci::LocalDevice, public DBus::LocalInterface, public DBus::LocalObject
-{					//todo, split into different interfaces
+{
 public:
-	HciDevice( std::string iface_name );
+	HciDevice( int dev_id );
 	~HciDevice();
 
 	/*	exported methods
@@ -41,8 +41,6 @@ public:
 	void PeriodicInquiry	( const DBus::CallMessage& );
 	void ExitPeriodicInquiry( const DBus::CallMessage& );
 	void InquiryCache	( const DBus::CallMessage& );
-
-	void CreateConnection	( const DBus::CallMessage& );
 
 	/*	signals
 	*/
@@ -191,7 +189,7 @@ public:
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
-	void CreateConnection	( const DBus::CallMessage& );
+	void CreateConnection	( const DBus::CallMessage& ); //creates an ACL connection
 
 	/*	event handlers
 	*/
@@ -220,31 +218,32 @@ public:
 		void* cookie
 	);
 
-	void on_connection_complete
-	(
-		u16 status,
-		void* cookie,
-		Hci::Connection* conn
-	);
+	/*	special handlers
+	*/
+	Hci::Connection* on_new_connection( Hci::ConnInfo& );
 
-private:
-	HciConnPTable		_connections;
 };
 
 /*	HCI Connection
 */
-class HciConnection : public DBus::LocalInterface, public DBus::LocalObject
+class HciConnection : public Hci::Connection, public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
-	HciConnection();
+	HciConnection
+	(
+		const char* obj_name,
+		Hci::RemoteDevice* parent,
+		Hci::ConnInfo& info
+	);
+
+	~HciConnection();
 
 	/*	exported methods
 	*/
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
-private:
-	Hci::Connection		_connection;
+	void CreateConnection	( const DBus::CallMessage& );	//creates a SCO connection
 };
 
 #endif//__BTOOL_HCI_DEVICE_H

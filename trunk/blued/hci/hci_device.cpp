@@ -10,11 +10,20 @@
 #include <cstring>
 #include <cstdio>
 
-HciDevice::HciDevice( std::string iface_name )
+static char __obj_name[255];
+
+static const char* __get_obj_name( int dev_id )
+{
+	memset(__obj_name,0,255);
+	snprintf(__obj_name, 255, DBUS_HCIDEV_PATH "hci%d",dev_id);
+	return __obj_name;
+}
+
+HciDevice::HciDevice( int dev_id )
 :
-	Hci::LocalDevice	( iface_name.c_str() ),
+	Hci::LocalDevice	( dev_id ),
 	DBus::LocalInterface	( DBUS_HCIDEV_IFACE ),
-	DBus::LocalObject	( (DBUS_HCIDEV_PATH + iface_name).c_str(), DBus::Connection::SystemBus() )
+	DBus::LocalObject	( __get_obj_name(dev_id), DBus::Connection::SystemBus() )
 {
 	/*	export methods
 	*/
@@ -709,7 +718,7 @@ HciRemote::HciRemote
 	Hci::RemoteInfo& info
 )
 :	Hci::RemoteDevice( parent, info ),
-	DBus::LocalInterface(DBUS_HCIREM_IFACE),
+	DBus::LocalInterface( DBUS_HCIREM_IFACE ),
 	DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
@@ -732,8 +741,6 @@ void HciRemote::CreateConnection( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage(msg);
 
-	/* creates a new ACL connection, if none exists
-	*/
 //	Hci::RemoteDevice::create_connection(  );
 }
 
@@ -770,13 +777,12 @@ void HciRemote::on_get_clock_offset
 {
 }
 
-void HciRemote::on_connection_complete
-(
-	u16 status,
-	void* cookie,
-	Hci::Connection* conn
-)
+
+Hci::Connection* HciRemote::on_new_connection( Hci::ConnInfo& ci )
 {
+	Hci::Connection* c = new HciConnection("blah", this, ci);
+
+	return c;
 }
 
 
@@ -884,3 +890,31 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 	}
 }
 #endif
+
+
+HciConnection::HciConnection
+(
+	const char* obj_name,
+	Hci::RemoteDevice* parent,
+	Hci::ConnInfo& info
+)
+:	Hci::Connection( parent, info ),
+	DBus::LocalInterface( DBUS_HCICONN_IFACE ),
+	DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
+{
+	register_method( HciConnection, GetProperty );
+	register_method( HciConnection, SetProperty );
+}
+
+HciConnection::~HciConnection()
+{
+}
+
+
+void HciConnection::GetProperty( const DBus::CallMessage& msg )
+{
+}
+
+void HciConnection::SetProperty( const DBus::CallMessage& msg )
+{
+}

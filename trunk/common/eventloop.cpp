@@ -105,7 +105,6 @@ void EventLoop::enter()
 					}
 					if( fds[i].revents & POLLOUT )
 					{
-						//todo, it's buggy
 						(*fit)->can_write( *(*fit) );
 					}
 					#if 0

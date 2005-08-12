@@ -77,7 +77,7 @@ void Connection::init()
 	//dbus_connection_add_filter(_connection, /*filter_handler*/NULL, this, 0); //FIXME
 
 	dbus_connection_set_dispatch_status_function(_connection, dispatch_status_stub, this, 0);
-	dbus_connection_set_exit_on_disconnect(_connection, false);
+	dbus_connection_set_exit_on_disconnect(_connection, true);
 }
 
 Connection::Connection( const Connection& c )

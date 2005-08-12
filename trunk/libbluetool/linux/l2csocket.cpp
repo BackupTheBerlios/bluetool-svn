@@ -22,7 +22,7 @@ bool L2CapSocket::connect( BdAddr& to, u32 flags )
 	sockaddr_l2 saddr;
 	saddr.l2_family = AF_BLUETOOTH;
 	saddr.l2_psm = htobs(SDP_PSM);
-	memcpy(&saddr.l2_bdaddr, to.addr(), sizeof(saddr.l2_bdaddr));
+	memcpy(&saddr.l2_bdaddr, to.ptr(), sizeof(saddr.l2_bdaddr));
 
 	return Socket::connect( (sockaddr*)&saddr, sizeof(saddr) );
 	//todo: retry if busy

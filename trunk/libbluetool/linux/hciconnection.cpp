@@ -5,22 +5,22 @@
 namespace Hci
 {
 
-#if 0
-
-Connection::Connection( LocalDevice& from, RemoteDevice& to )
-:	_from(from), _to(to), _dd(from.descriptor())
+Connection::Connection
+(
+	RemoteDevice* to,
+	ConnInfo& info
+)
+:	_to(to),
+	_info(info)
 {
-//	HciManager::connections.push_back(*this);
-//	_iter = HciManager::connections.end();
-
-//	_handle = ??
 }
 
 Connection::~Connection()
 {
-//	HciManager::connections.erase(_iter);
+/*	we don't care about disconnection
+	we should be already disconnected
+	when reaching this point
+*/
 }
-
-#endif
 
 }//namespace Hci

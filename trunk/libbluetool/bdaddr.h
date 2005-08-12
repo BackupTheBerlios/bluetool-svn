@@ -20,14 +20,14 @@ public:
 
 	const std::string to_string() const;
 
-	inline u8* addr();
+	inline const u8* ptr() const;
 
 private:
 
 	u8 _baddr[6];
 };
 
-u8* BdAddr::addr()
+const u8* BdAddr::ptr() const
 {
 	return _baddr;
 }

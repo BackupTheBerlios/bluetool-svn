@@ -18,10 +18,7 @@ Socket::Socket()
 
 bool Socket::bind( int id )
 {
-	struct __PACKED {
-		u8  hci_family;
-		u16 hci_dev;
-	} _saddr;
+	sockaddr_hci _saddr;
 
 	_saddr.hci_family = AF_BLUETOOTH;
 	_saddr.hci_dev = id;

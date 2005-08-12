@@ -30,24 +30,24 @@ LocalDevices LocalDevice::enumerate()
 /*	device control
 */
 
-void LocalDevice::up( const char* name )
+void LocalDevice::up( int id )
 {
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVUP, hci_devid(name)) < 0 && errno != EALREADY )
+	if( ioctl(sock.handle(), HCIDEVUP, id) < 0 && errno != EALREADY )
 		throw Exception();
 }
 
-void LocalDevice::down( const char* name )
+void LocalDevice::down( int id )
 {
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVDOWN, hci_devid(name)) < 0 )
+	if( ioctl(sock.handle(), HCIDEVDOWN, id) < 0 )
 		throw Exception();
 }
 
-void LocalDevice::reset( const char* name )
+void LocalDevice::reset( int id )
 {
-	up(name);
-	down(name);
+	up(id);
+	down(id);
 }
 
 /*
@@ -71,11 +71,13 @@ Request::~Request()
 /*
 */
 
-void LocalDevice::Private::open( int dev_id )
+void LocalDevice::Private::init( int dev_id )
 {
 	id = dev_id;
 
-	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)&ba)< 0 )
+	up(id);
+
+	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)&ba) < 0 )
 		throw Exception();
 
 	notifier.fd( dd.handle() );
@@ -193,6 +195,9 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	evt_cmd_status   *cs;
 	int len;
 
+	if(fn.state() & POLLERR || fn.state() & POLLHUP)
+		throw Exception();
+
 	while( (len = read(fn.fd(), buf, sizeof(buf))) < 0 )
 	{
         	if (errno == EAGAIN || errno == EINTR)
@@ -256,6 +261,11 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	return;
 _fire:	pr->status = Request::COMPLETE;
 	fire_event(pr);
+
+	/* after this request is complete, go serve any
+	   other which may still be pending in the queue
+	*/
+	notifier.flags( notifier.flags() | POLLOUT );
 }
 
 void LocalDevice::Private::write_ready( FdNotifier& fn )
@@ -284,10 +294,15 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 			{
 				if( pr->hr.event == EVT_CMD_STATUS || pr->hr.event == EVT_CMD_COMPLETE )
 				{
-					if(of.opcode()) break;
+					if(of.opcode())
+					{
+						notifier.flags( notifier.flags() & ~POLLOUT );
+						break;
+					}
 				}
 				else if(of.test_event(pr->hr.event))
 				{
+					notifier.flags( notifier.flags() & ~POLLOUT );
 					break;
 				}
 				pr->status = Request::WRITING;
@@ -619,15 +634,56 @@ void LocalDevice::Private::hci_event_received( Request* req )
 				hci_dbg("remote name %s from non cached device %s!",r->name, straddr);
 			}
 
-			req->dest_type = Request::REMOTE;
-			req->dest.rem = i->second;
+//			req->dest_type = Request::REMOTE;
+//			req->dest.rem = i->second;
 			break;
 		}
 		case EVT_CONN_COMPLETE:
 		{
 			evt_conn_complete* r = (evt_conn_complete*) req->hr.rparam;
 
-	
+			if(r->status)
+			{
+				char straddr[18] = {0};
+
+				ba2str(&(r->bdaddr),straddr);
+
+				RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
+
+				if( i != inquiry_cache.end() )
+				{
+					ConnInfo ci =
+					{
+						r->handle,
+						r->link_type,
+						r->encr_mode
+					};
+					Connection* c = i->second->on_new_connection(ci);
+
+					if(c) i->second->_connections[r->handle] = c;
+				}
+				else
+				{
+					hci_dbg("connection from non cached device %s!",straddr);
+				}
+			}
+//			req->dest_type = Request::REMOTE;
+//			req->dest.rem = i->second;
+			break;
+		}
+		case EVT_DISCONN_COMPLETE:
+		{
+			evt_disconn_complete* r = (evt_disconn_complete*) req->hr.rparam;
+
+			/* find connection object and delete it
+			*/
+			RemoteDevPTable::iterator ri = inquiry_cache.begin();
+			while(ri != inquiry_cache.end())
+			{
+				if(ri->second->remove_connection(r->handle))
+					break;
+				++ri;
+			}
 			break;
 		}
 	}
@@ -640,14 +696,14 @@ LocalDevice::LocalDevice( const char* dev_name )
 {
 	pvt = new Private;
 	pvt->parent = this;
-	pvt->open(hci_devid(dev_name));
+	pvt->init(hci_devid(dev_name));
 }
 
 LocalDevice::LocalDevice( int dev_id )
 {
 	pvt = new Private;
 	pvt->parent = this;
-	pvt->open(dev_id);
+	pvt->init(dev_id);
 }
 
 LocalDevice::~LocalDevice()
@@ -1039,15 +1095,76 @@ RemoteDevice::RemoteDevice
 RemoteDevice::~RemoteDevice()
 {}
 
-void RemoteDevice::create_connection
+bool RemoteDevice::remove_connection( u16 handle )
+{
+	ConnPTable::iterator i = _connections.find(handle);
+	if(i != _connections.end())
+	{
+		delete i->second;
+		_connections.erase(i);
+		return true;
+	}
+	return false;
+}
+
+void RemoteDevice::create_acl_connection
 (
-	bool acl_or_sco,
 	u16 ptype,
 	bool change_role,
 	void* cookie,
 	int timeout
 )
 {
+	create_conn_cp* cp = new create_conn_cp;
+
+	memcpy(&(cp->bdaddr), addr().ptr(), 6);
+	cp->pkt_type       = ptype;
+	cp->pscan_rep_mode = page_scan_repeat_mode();
+	cp->clock_offset   = clock_offset();
+	cp->role_switch    = change_role ? 1 : 0;
+
+	Request* req = new Request;
+
+	req->hr.ogf    = OGF_LINK_CTL;
+	req->hr.ocf    = OCF_CREATE_CONN;
+	req->hr.event  = EVT_CONN_COMPLETE;
+	req->hr.cparam = cp;
+	req->hr.clen   = CREATE_CONN_CP_SIZE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = EVT_CONN_COMPLETE_SIZE;
+
+	req->cookie = cookie;
+	req->to.interval(timeout);
+
+	_local_dev->pvt->post_req(req);
+}
+
+void RemoteDevice::create_sco_connection
+(
+	u16 handle,
+	u16 ptype,
+	void* cookie,
+	int timeout
+)
+{
+	add_sco_cp* cp = new add_sco_cp;
+	cp->handle = handle;
+	cp->pkt_type = ptype;
+
+	Request* req = new Request;
+
+	req->hr.ogf    = OGF_LINK_CTL;
+	req->hr.ocf    = OCF_ADD_SCO;
+	req->hr.event  = EVT_CONN_COMPLETE;
+	req->hr.cparam = cp;
+	req->hr.clen   = ADD_SCO_CP_SIZE;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = EVT_CONN_COMPLETE_SIZE;
+
+	req->cookie = cookie;
+	req->to.interval(timeout);
+
+	_local_dev->pvt->post_req(req);
 }
 
 void RemoteDevice::update( RemoteInfo& info )

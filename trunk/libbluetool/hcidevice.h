@@ -36,9 +36,9 @@ public:
 
 	/*	device control
 	*/	
-	static void up( const char* name );
-	static void down( const char* name );
-	static void reset( const char* name );
+	static void up( int );
+	static void down( int );
+	static void reset( int );
 
 public:
 
@@ -209,7 +209,10 @@ public:
 	struct Private;
 
 private:	
-	Private* pvt;	
+	Private* pvt;
+
+friend class RemoteDevice;
+friend class Connection;	
 };
 
 /*
@@ -253,17 +256,24 @@ public:
 	*/
 	void get_name( void* cookie, int timeout );
 
-	void get_version( void* cookie, int timeout );	//needs a connection
+	void get_version( void* cookie, int timeout );	//ACL connection needed
 
-	void get_features( void* cookie, int timeout );	//needs a connection
+	void get_features( void* cookie, int timeout );	//ACL connection needed
 
-	void get_clock_offset( void* cookie, int timeout );
+	void get_clock_offset( void* cookie, int timeout ); //here too
 
-	void create_connection
+	void create_acl_connection
 	(
-		bool acl_or_sco,
 		u16 ptype,
 		bool change_role,
+		void* cookie,
+		int timeout
+	);
+
+	void create_sco_connection
+	(
+		u16 acl_handle,
+		u16 ptype,
 		void* cookie,
 		int timeout
 	);
@@ -302,13 +312,13 @@ private:
 		void* cookie
 	){}
 
-	virtual void on_connection_complete
-	(
-		u16 status,
-		void* cookie,
-		Hci::Connection* conn
-	){}
+	/*	special handlers
+	*/
+	virtual Hci::Connection* on_new_connection( ConnInfo& ) = 0;
 
+	/* misc..
+	*/
+	bool remove_connection(u16);
 
 	/*	special event handlers
 	*/
@@ -319,6 +329,9 @@ private:
 	RemoteInfo	_info;
 
 	LocalDevice*	_local_dev;
+
+	ConnPTable	_connections;
+
 	double		_time_last_updated;
 
 friend struct LocalDevice::Private;
