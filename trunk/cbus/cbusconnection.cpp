@@ -12,7 +12,7 @@ static Connection* g_activation_bus = NULL;	//TODO: that's a BAAD thing
 
 Connection& Connection::SystemBus()
 {
-	//return Connection(DBUS_BUS_SYSTEM);	//TODO: allow to safely make a copy of a connection, 'cause this sucks!
+	//return Connection(DBUS_BUS_SYSTEM);
 	if(!g_system_bus)
 		g_system_bus = new Connection(DBUS_BUS_SYSTEM);
 

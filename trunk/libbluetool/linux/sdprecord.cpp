@@ -6,14 +6,25 @@ namespace Sdp
 
 sdp_data_t* DataElement::Private::new_seq( DataElementSeq& des )
 {
-	sdp_data_t* seq = sdp_data_alloc(SDP_SEQ8, NULL);
-
 	DataElementSeq::iterator i = des.begin();
+
+	sdp_data_t* list = i->pvt->elem;
+
 	while(i != des.end())
 	{
-		sdp_seq_append(seq,i->pvt->elem);
+		DataElementSeq::iterator n = i;
+		if(++n != des.end())
+		{
+			i->pvt->elem->next = n->pvt->elem;
+			break;
+		}
+		else
+		{
+			i->pvt->elem->next = NULL;		
+		}
 		++i;
 	}
+	sdp_data_t* seq = sdp_data_alloc(SDP_SEQ8, list);
 	return seq;
 }
 
@@ -22,7 +33,7 @@ sdp_data_t* DataElement::Private::new_seq( DataElementSeq& des )
 
 DataElement::DataElement()
 {
-	pvt = NULL;
+	pvt = new Private;
 }
 
 DataElement::DataElement( const DataElement& de )
@@ -103,7 +114,6 @@ DataElement::operator UUID&()
 
 Bool::Bool( bool b )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_BOOL,&b);
 }
@@ -123,7 +133,6 @@ void Bool::operator = ( bool b )
 
 U32::U32( u32 u )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_UINT32, &u);
 }
@@ -143,7 +152,6 @@ void U32::operator = ( u32 u )
 
 String::String( const char* string )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_TEXT_STR16, string);
 }
@@ -165,7 +173,6 @@ void String::operator = ( std::string& s )
 
 UUID::UUID( u16 value )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_UUID16, &value);
 
@@ -174,7 +181,6 @@ UUID::UUID( u16 value )
 
 UUID::UUID( u32 value )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_UUID32, &value);
 
@@ -183,7 +189,6 @@ UUID::UUID( u32 value )
 
 UUID::UUID( u128 value )
 {
-	pvt = new Private;
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_UUID128,&value);
 
@@ -226,6 +231,9 @@ void UUID::operator = ( u128 u )
 /*	Attributes
 */
 
+Attribute::Attribute()
+{}
+
 Attribute::Attribute( u16 id, DataElement& de )
 :	DataElement(de)
 {
@@ -245,12 +253,6 @@ DataElement& Attribute::elem()
 /*	Records
 */
 
-struct Record::Private
-{
-	sdp_record_t* rec;
-	bool alloc;
-};
-
 Record::Record()
 {
 	pvt = new Private;
@@ -258,12 +260,18 @@ Record::Record()
 	pvt->rec = sdp_record_alloc();
 }
 
+Record::Record( Private* p )
+{
+	pvt = p;
+}
+
 Record::Record( const Record& r )
 {
 	pvt = new Private;
 	pvt->alloc = true;
 	pvt->rec = sdp_record_alloc();
-	memcpy(&(pvt->rec),&(r.pvt->rec),sizeof(sdp_record_t));
+	memcpy(pvt->rec,r.pvt->rec,sizeof(sdp_record_t));
+	//todo : this is wrong and leads to double free()s
 }
 
 Record::~Record()
@@ -294,5 +302,52 @@ void Record::remove( u16 id )
 {
 	sdp_attr_remove(pvt->rec, id);
 }
+
+struct Record::iterator::Private
+{};
+
+Record::iterator::iterator(Record::Private* _pvt)
+{
+	pvt = _pvt && _pvt->rec
+		? (Record::iterator::Private*)
+			(_pvt->rec->attrlist)
+		: NULL;
+}
+
+const Record::iterator& Record::iterator::operator ++()
+{
+	if(pvt)
+		pvt = (Record::iterator::Private*)
+			((sdp_list_t*)pvt)->next;
+	return (*this);
+}
+
+bool Record::iterator::operator == (const iterator& i)
+{
+	return pvt == i.pvt;
+}
+
+Attribute Record::iterator::operator *()
+{
+	Attribute a;
+	a.pvt->elem = (sdp_data_t*)((sdp_list_t*)pvt)->data;
+	return a;
+}
+
+Attribute Record::iterator::operator ->()
+{
+	return *(*this);
+}
+
+Record::iterator Record::begin()
+{
+	return iterator (pvt);
+}
+
+Record::iterator Record::end()
+{
+	return iterator (NULL);
+}
+
 
 }//namespace Sdp

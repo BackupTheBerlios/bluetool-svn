@@ -11,8 +11,6 @@ SdpDatabase_i::SdpDatabase_i()
 SdpDatabase::SdpDatabase()
 :	BluetoolService("database")
 {
-	Sdp::Session sess;
-	sess.start_complete_search();
 }
 
 void SdpDatabase::AddRecord( const DBus::CallMessage& )

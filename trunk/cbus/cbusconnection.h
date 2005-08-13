@@ -6,9 +6,9 @@
 
 namespace DBus
 {
-class Connection;
+	class Connection;
 
-typedef std::list<Connection*>	ConnectionPList;
+	typedef std::list<Connection*>	ConnectionPList;
 }
 
 #include "cbusmonitor.h"

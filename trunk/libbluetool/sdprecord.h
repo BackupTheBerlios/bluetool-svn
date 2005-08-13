@@ -13,8 +13,6 @@ namespace Sdp
 	class DataElement;	
 	typedef std::list<DataElement> DataElementSeq;
 
-	typedef sigc::signal<void, u16, DataElementSeq&> SdpEvent;
-
 	class Bool;
 	class U32;
 	//typedef std::list<U32> U32Seq;
@@ -25,6 +23,9 @@ namespace Sdp
 	class Attribute;
 
 	class Record;
+	typedef std::list<Record> RecordList;
+
+	typedef sigc::signal<void, u16, const RecordList&> SdpEvent;
 }
 
 #include "sdpsession.h"
@@ -51,6 +52,7 @@ public:
 	operator UUID&();
 */
 	struct Private;
+
 protected:
 	Private* pvt;
 
@@ -106,16 +108,6 @@ public:
 	void operator = ( u128 u );
 };
 
-class Attribute : public DataElement
-{
-public:
-	Attribute( u16 id, DataElement& );
-
-	u16 id();
-
-	DataElement& elem();
-};
-
 class Record
 {
 public:
@@ -155,9 +147,56 @@ public:
 
 	void add_group_id( UUID& );
 
+	class iterator;
+
+	iterator begin();
+	iterator end();
+
+	struct Private;
+
+	Record( Private* );
+
+private:
+	Private* pvt;
+};
+
+
+class Record::iterator
+{
+public:
+	iterator(Record::Private* );
+
+	const iterator& operator ++();
+
+	bool operator == (const iterator& i);
+	bool operator != (const iterator& i)
+	{
+		return !((*this)==i);
+	}
+
+	Attribute operator *();
+
+	Attribute operator ->();
+	
 private:
 	struct Private;
+
 	Private* pvt;
+};
+
+
+class Attribute : public DataElement
+{
+public:
+	Attribute( u16 id, DataElement& );
+
+	u16 id();
+
+	DataElement& elem();
+private:
+	Attribute();
+
+friend class Record::iterator;
 };
 
 }//namespace Sdp

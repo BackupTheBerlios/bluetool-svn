@@ -29,6 +29,7 @@ public:
 	void RemoveRecord	( const DBus::CallMessage& );
 
 private:
+	Sdp::Session _local_sess;	//connection to the local database
 };
 
 #endif//__BTOOL_SDP_DATABASE_H

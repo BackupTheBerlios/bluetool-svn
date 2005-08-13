@@ -18,6 +18,13 @@ struct DataElement::Private
 	static sdp_data_t* new_seq( DataElementSeq& );
 };
 
+
+struct Record::Private
+{
+	sdp_record_t* rec;
+	bool alloc;
+};
+
 }
 
 #endif//__SDP_RECORD_P_H
