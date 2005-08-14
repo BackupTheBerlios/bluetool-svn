@@ -383,11 +383,6 @@ Session::Session()
 {
 	pvt = new Private(this);
 	pvt->local = true;
-
-	DataElementSeq attrs;
-	attrs.push_back( Sdp::U32(0x0000FFFF) );
-
-	this->start_attribute_search(0,attrs);
 }
 
 Session::Session( BdAddr& src, BdAddr& dest )

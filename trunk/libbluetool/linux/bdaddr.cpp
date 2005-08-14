@@ -19,3 +19,9 @@ const std::string BdAddr::to_string() const
 
 	return std::string(straddr);
 }
+
+ushort BdAddr::operator [] ( uint i ) const
+{
+	if(i < 6) return _baddr[i];
+	return 0;
+}
