@@ -25,7 +25,7 @@ class Session
 public:
 	Session();
 
-	Session( BdAddr& src, BdAddr& dest );
+	Session( const BdAddr& src, const BdAddr& dest );
 
 	~Session();
 

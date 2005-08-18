@@ -1,8 +1,12 @@
-#include <bluetooth/bluetooth.h>
-#include <bluetooth/hci.h>
-#include <bluetooth/hci_lib.h>
+//#include <bluetooth/bluetooth.h>
+//#include <bluetooth/hci.h>
+//#include <bluetooth/hci_lib.h>
 
 #include "../bluedebug.h"
+
+#include "../btool_names.h"
+#include "../btool_device.h"
+
 #include "hci_device.h"
 
 #include <map>
@@ -19,14 +23,69 @@ HciDevice::HciDevice( int dev_id )
 {
 	/*	export methods
 	*/
+	register_method( HciDevice, Up );
+	register_method( HciDevice, Down );
 	register_method( HciDevice, GetProperty );
 	register_method( HciDevice, SetProperty );
 	register_method( HciDevice, StartInquiry );
+	register_method( HciDevice, CancelInquiry );
 }
 
 HciDevice::~HciDevice()
 {
 	//clear_cache();
+}
+
+void HciDevice::Up( const DBus::CallMessage& msg )
+{
+	u16 status;
+	DBus::ReturnMessage reply(msg);
+	try
+	{
+		Hci::LocalDevice::up();
+
+		status = 0;
+		reply.append( DBUS_TYPE_UINT16, &status,
+			      DBUS_TYPE_INVALID
+		);
+	}
+	catch(Hci::Exception& e)
+	{
+		status = 1;
+		const char* strerr = e.what();
+
+		reply.append( DBUS_TYPE_UINT16, &status,
+			      DBUS_TYPE_STRING, &strerr,
+			      DBUS_TYPE_INVALID
+		);
+	}
+	_bus.send(reply);
+}
+
+void HciDevice::Down( const DBus::CallMessage& msg )
+{
+	u16 status;
+	DBus::ReturnMessage reply(msg);
+	try
+	{
+		Hci::LocalDevice::down();
+
+		status = 0;
+		reply.append( DBUS_TYPE_UINT16, &status,
+			       DBUS_TYPE_INVALID
+		);
+	}
+	catch(Hci::Exception& e)
+	{
+		status = 1;
+		const char* strerr = e.what();
+
+		reply.append( DBUS_TYPE_UINT16, &status,
+			      DBUS_TYPE_STRING, &strerr,
+			      DBUS_TYPE_INVALID
+		);
+	}
+	_bus.send(reply);
 }
 
 /*	device properties management
@@ -53,8 +112,8 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 //	if( property == "security_manager_enable" )
 //		Hci::LocalDevice::get_secman_enable();
 //	else
-	if( property == "scan_type" )
-		Hci::LocalDevice::get_scan_type(reply, HCI_TIMEOUT);
+	if( property == "scan_enable" )
+		Hci::LocalDevice::get_scan_enable(reply, HCI_TIMEOUT);
 	else
 	if( property == "packet_type" )
 	{
@@ -77,7 +136,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	if( property == "local_name" )
 		Hci::LocalDevice::get_name(reply, HCI_TIMEOUT);
 	else
-	if( property == "device_class" )
+	if( property == "class" )
 		Hci::LocalDevice::get_class(reply, HCI_TIMEOUT);
 	else
 	if( property == "voice_setting" )
@@ -132,6 +191,32 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	if( property == "revision_info" )
 	{
 	}
+	/*	synchronous methods
+		(they're available only as ioctls which cannot be unblocked)
+	*/
+	else
+	if( property == "stats" )
+	{
+		int status;
+		int rx_bytes;
+		int rx_errors;
+		int tx_bytes;
+		int tx_errors;
+		Hci::LocalDevice::get_stats
+		(
+			&status,&rx_bytes,&rx_errors,&tx_bytes,&rx_errors
+		);
+		u16 err = 0;
+		reply->append( DBUS_TYPE_UINT16, &err,
+			       DBUS_TYPE_BOOLEAN, &status,
+			       DBUS_TYPE_INT32, &rx_bytes,
+			       DBUS_TYPE_INT32, &rx_errors,
+			       DBUS_TYPE_INT32, &tx_bytes,
+			       DBUS_TYPE_INT32, &tx_errors,
+			       DBUS_TYPE_INVALID
+		);
+		_bus.send(*reply);
+		delete reply;	}
 	
 	else
 	{
@@ -147,7 +232,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	}
 	
 	}
-	catch( Hci::Exception& e )
+	catch( std::exception& e )
 	{
 		u16 err = 1;
 		const char* strerr = e.what();
@@ -195,10 +280,10 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 //	}
 	
 	else
-	if( property == "scan_type" )
+	if( property == "scan_enable" )
 	{
 		u8 type = i.get_byte();
-		Hci::LocalDevice::set_scan_type(type,reply,HCI_TIMEOUT);
+		Hci::LocalDevice::set_scan_enable(type,reply,HCI_TIMEOUT);
 	}
 	
 //	else
@@ -236,8 +321,12 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	}
 	
 	else
-	if( property == "device_class" )
+	if( property == "class" )
 	{
+		u8 major = i.get_byte(); ++i;
+		u8 minor = i.get_byte(); ++i;
+		u8 ver   = i.get_byte();
+		Hci::LocalDevice::set_class(major,minor,ver,reply,HCI_TIMEOUT);
 	}
 	
 	else
@@ -305,6 +394,8 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 		u16 err = 1;
 		const char* strerr = "No such property";
 
+		blue_dbg("error: %s", strerr);
+
 		reply->append( DBUS_TYPE_UINT16, &err,
 			       DBUS_TYPE_STRING, &strerr,
 			       DBUS_TYPE_INVALID
@@ -314,10 +405,12 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	}
 	
 	}
-	catch( Hci::Exception& e )
+	catch( std::exception& e )
 	{
 		u16 err = 1;
 		const char* strerr = e.what();
+
+		blue_dbg("error: %s", strerr);
 
 		reply->append( DBUS_TYPE_UINT16, &err,
 			       DBUS_TYPE_STRING, &strerr,
@@ -332,7 +425,14 @@ void HciDevice::StartInquiry( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage (msg);
 
-	Hci::LocalDevice::start_inquiry(NULL, IREQ_CACHE_FLUSH, reply);
+	Hci::LocalDevice::start_inquiry(NULL, 0/*IREQ_CACHE_FLUSH*/, reply);
+}
+
+void HciDevice::CancelInquiry( const DBus::CallMessage& msg )
+{
+	DBus::ReturnMessage* reply = new DBus::ReturnMessage (msg);
+
+	Hci::LocalDevice::cancel_inquiry(reply, HCI_TIMEOUT);
 }
 
 /*	signals
@@ -349,7 +449,7 @@ void HciDevice::DeviceInRange( const HciRemote& hr )
 		"DeviceInRange"
 	);
 
-	const char* name = hr.oname().c_str();
+	const char* name = "b00rp";//hr.oname().c_str();
 
 	sig.append
 	(
@@ -371,7 +471,7 @@ void HciDevice::DeviceOutOfRange( const HciRemote& hr )
 		"DeviceOutOfRange"
 	);
 
-	const char* name = hr.oname().c_str();
+	const char* name = "b00rp";//hr.oname().c_str();
 
 	sig.append
 	(
@@ -486,7 +586,7 @@ void HciDevice::on_set_encrypt_mode
 	);
 }
 
-void HciDevice::on_get_scan_type
+void HciDevice::on_get_scan_enable
 (
 	u16 status,
 	void* cookie,
@@ -501,7 +601,7 @@ void HciDevice::on_get_scan_type
 	);
 }
 
-void HciDevice::on_set_scan_type
+void HciDevice::on_set_scan_enable
 (
 	u16 status,
 	void* cookie
@@ -552,9 +652,9 @@ void HciDevice::on_get_class
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
 	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(dev_class[0]),
-		       DBUS_TYPE_BYTE,   &(dev_class[1]),
-		       DBUS_TYPE_BYTE,   &(dev_class[2]),
+		       DBUS_TYPE_BYTE,   dev_class+0,
+		       DBUS_TYPE_BYTE,   dev_class+1,
+		       DBUS_TYPE_BYTE,   dev_class+2,
 		       DBUS_TYPE_INVALID
 	);
 }
@@ -666,22 +766,69 @@ void HciDevice::on_inquiry_complete
 	);
 }
 
-/*	special handlers
-*/
-void HciDevice::on_after_event( void* cookie )
+void HciDevice::on_inquiry_cancel
+(
+	u16 status,
+	void* cookie
+)
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	_bus.send(*reply);
-	/* if status != 0, send an ErrorMessage instead
-	*/
-	delete reply;
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
 }
 
-Hci::RemoteDevice* HciDevice::on_new_cache_entry
+void HciDevice::on_periodic_inquiry_started
 (
-	Hci::RemoteInfo& info
+	u16 status,
+	void* cookie
 )
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciDevice::on_periodic_inquiry_cancel
+(
+	u16 status,
+	void* cookie
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+/*	special handlers
+*/
+void HciDevice::on_after_event( int error, void* cookie )
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+	if(error)
+	{
+		char* strerr = strerror(error);
+
+		DBus::ErrorMessage emsg;
+		emsg.name(BTOOL_ERROR_HCI);
+		emsg.append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
+		emsg.reply_serial(reply->reply_serial());
+
+		_bus.send(emsg);
+	}
+	else
+	{
+		_bus.send(*reply);
+	}
+	delete reply;
+}
+#if 0
+Hci::RemoteDevice* HciDevice::on_new_cache_entry( Hci::RemoteInfo& info )
 {
 	/* bluetooth addresses contain colons, which are not 
 	   allowed in the DBUS specification
@@ -692,8 +839,8 @@ Hci::RemoteDevice* HciDevice::on_new_cache_entry
 		if(valid_addr[i] == ':')
 			valid_addr[i] = '_';
 	}
-
-	std::string rem_name = /*oname()*/ + BTOOL_REM_SUBDIR + valid_addr;
+	std::string path = Bluetool::Device::generate_dev_path(addr());
+	std::string rem_name = path + BTOOL_REM_SUBDIR + valid_addr;
 
 	HciRemote* hr = new HciRemote(rem_name.c_str(),this,info);
 
@@ -701,19 +848,20 @@ Hci::RemoteDevice* HciDevice::on_new_cache_entry
 
 	return hr;
 }
-
+#endif
 /*	remote device
 */
 
 HciRemote::HciRemote
 (
-	const char* obj_name,
+	//const char* obj_name,
 	Hci::LocalDevice* parent,
 	Hci::RemoteInfo& info
 )
 :	Hci::RemoteDevice( parent, info ),
 	DBus::LocalInterface( BTOOL_REM_IFACE ),
-	DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
+	_bus(DBus::Connection::SystemBus())
+	//DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
 	register_method( HciRemote, SetProperty );
@@ -750,7 +898,10 @@ void HciRemote::on_get_name
 void HciRemote::on_get_version
 (
 	u16 status,
-	void* cookie
+	void* cookie,
+	const char* lmp_ver,
+	u16 lmp_sub,
+	const char* manufacturer
 )
 {
 }
@@ -758,7 +909,8 @@ void HciRemote::on_get_version
 void HciRemote::on_get_features
 (
 	u16 status,
-	void* cookie
+	void* cookie,
+	const char* features
 )
 {
 }
@@ -766,7 +918,8 @@ void HciRemote::on_get_features
 void HciRemote::on_get_clock_offset
 (
 	u16 status,
-	void* cookie
+	void* cookie,
+	u16 clock_offset
 )
 {
 }
@@ -774,9 +927,12 @@ void HciRemote::on_get_clock_offset
 
 Hci::Connection* HciRemote::on_new_connection( Hci::ConnInfo& ci )
 {
-	Hci::Connection* c = new HciConnection("blah", this, ci);
+	char path[256];
+//	snprintf(path,sizeof(path),"%s"BTOOL_CONN_SUBDIR"0x%04X",oname().c_str(),ci.handle);
 
-	return c;
+//	HciConnection* c = new HciConnection(path, this, ci);
+
+	return NULL;
 }
 
 

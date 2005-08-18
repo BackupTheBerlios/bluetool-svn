@@ -8,13 +8,13 @@ namespace Bluetool
 static const char* __gen_svcdb_oname( const char* parent )
 {
 	static char buf[256];
-	snprintf(buf,sizeof(buf),"%s/servicedb",parent);
+	snprintf(buf,sizeof(buf),"%sservicedb",parent);
 	return buf;
 }
 
 ServiceDatabase::ServiceDatabase( const char* dbus_root, const BdAddr& dev_addr )
 :	DBus::LocalInterface( BTOOL_SERVICEDB_IFACE ),
-	DBus::LocalObject( __gen_svcdb_oname("/servicedb"), DBus::Connection::SystemBus() )
+	DBus::LocalObject( __gen_svcdb_oname(dbus_root), DBus::Connection::SystemBus() )
 {
 	std::string uscore_addr = dev_addr.to_string();
 	for( uint i = 0; i < uscore_addr.length(); ++i )

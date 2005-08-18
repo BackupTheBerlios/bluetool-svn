@@ -5,6 +5,7 @@ include ../Makefile.inc
 #
 CPPS = $(wildcard *.cpp \
 		  ./hci/*.cpp \
+		  ./sdp/*.cpp \
 		  ./services/*.cpp \
 		  ./services/database/*.cpp \
 		  ./services/pan/*.cpp \

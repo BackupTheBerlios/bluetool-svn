@@ -1,5 +1,5 @@
-CC	= g++-4.0
-CPP	= cpp-4.0
+CC	= g++
+CPP	= cpp
 
 DBGFLAGS	= -D_DEBUG -ggdb
 

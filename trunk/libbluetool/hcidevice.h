@@ -36,9 +36,12 @@ public:
 
 	/*	device control
 	*/	
-	static void up( int );
-	static void down( int );
-	static void reset( int );
+	void up();
+	void down();
+	void reset();
+
+	void on_up();
+	void on_down();
 
 public:
 
@@ -56,6 +59,8 @@ public:
 
 	int id() const;
 
+	int get_stats(int*,int*,int*,int*,int*);
+
 	/*	device properties
 	*/
 	void get_auth_enable( void* cookie, int timeout );
@@ -64,14 +69,14 @@ public:
 	void get_encrypt_mode( void* cookie, int timeout );
 	void set_encrypt_mode( u8, void* cookie, int timeout );
 
-	void get_scan_type( void* cookie, int timeout );
-	void set_scan_type( u8, void* cookie, int timeout );
+	void get_scan_enable( void* cookie, int timeout );
+	void set_scan_enable( u8, void* cookie, int timeout );
 
 	void set_name( const char*, void* cookie, int timeout );
 	void get_name( void* cookie, int timeout );
 
 	void get_class( void* cookie, int timeout );
-	void set_class( u32 cls, void* cookie, int timeout );
+	void set_class( u8, u8, u8, void* cookie, int timeout );
 
 	void get_voice_setting( void* cookie, int timeout );
 	void set_voice_setting( u16 vs, void* cookie, int timeout );
@@ -85,7 +90,10 @@ public:
 	/*	device operations
 	*/
 	void start_inquiry( u8* lap, u32 flags, void* cookie );
-	void cancel_inquiry( void* cookie );
+	void cancel_inquiry( void* cookie, int timeout );
+
+	void start_periodic_inquiry( u8* lap, u16 period, void* cookie, int timeout );
+	void cancel_periodic_inquiry( void* cookie, int timeout );
 
 private:
 	/*	event handlers
@@ -95,85 +103,85 @@ private:
 		u16 status,
 		void* cookie,
 		u8 auth
-	){}
+	) = 0;
 
 	virtual void on_set_auth_enable
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
 	virtual void on_get_encrypt_mode
 	(
 		u16 status,
 		void* cookie,
 		u8 encrypt
-	){}
+	) = 0;
 
 	virtual void on_set_encrypt_mode
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
-	virtual void on_get_scan_type
+	virtual void on_get_scan_enable
 	(
 		u16 status,
 		void* cookie,
 		u8 auth
-	){}
+	) = 0;
 
-	virtual void on_set_scan_type
+	virtual void on_set_scan_enable
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
 	virtual void on_get_name
 	(
 		u16 status,
 		void* cookie,
 		const char* name
-	){}
+	) = 0;
 
 	virtual void on_set_name
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
 	virtual void on_get_class
 	(
 		u16 status,
 		void* cookie,
 		u8* dev_class
-	){}
+	) = 0;
 
 	virtual void on_set_class
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
 	virtual void on_get_voice_setting
 	(
 		u16 status,
 		void* cookie,
 		u16 setting
-	){}
+	) = 0;
 
 	virtual void on_set_voice_setting
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
 
 	virtual void on_get_address
 	(
 		u16 status,
 		void* cookie,
 		const char* address
-	){}
+	) = 0;
 
 	virtual void on_get_version
 	(
@@ -184,24 +192,42 @@ private:
 		const char* lmp_ver,
 		u16 lmp_subver,
 		const char* manufacturer
-	){}
+	) = 0;
 
 	virtual void on_get_features
 	(
 		u16 status,
 		void* cookie,
 		const char* features
-	){}
+	) = 0;
 
 	virtual void on_inquiry_complete
 	(
 		u16 status,
 		void* cookie
-	){}
+	) = 0;
+
+	virtual void on_inquiry_cancel
+	(
+		u16 status,
+		void* cookie
+	) = 0;
+
+	virtual void on_periodic_inquiry_started
+	(
+		u16 status,
+		void* cookie
+	) = 0;
+
+	virtual void on_periodic_inquiry_cancel
+	(
+		u16 status,
+		void* cookie
+	) = 0;
 
 	/*	special event handlers
 	*/
-	virtual void on_after_event( void* cookie ) = 0;
+	virtual void on_after_event( int error, void* cookie ) = 0;
 
 	virtual RemoteDevice* on_new_cache_entry( RemoteInfo& ) = 0;
 
@@ -292,25 +318,30 @@ private:
 		u16 status,
 		void* cookie,
 		const char* name
-	){}
+	) = 0;
 
 	virtual void on_get_version
 	(
 		u16 status,
-		void* cookie
-	){}
+		void* cookie,
+		const char* lmp_ver,
+		u16 lmp_sub,
+		const char* manufacturer
+	) = 0;
 
 	virtual void on_get_features
 	(
 		u16 status,
-		void* cookie
-	){}
+		void* cookie,
+		const char* features
+	) = 0;
 
 	virtual void on_get_clock_offset
 	(
 		u16 status,
-		void* cookie
-	){}
+		void* cookie,
+		u16 clock_offset
+	) = 0;
 
 	/*	special handlers
 	*/

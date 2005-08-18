@@ -117,7 +117,7 @@ void Session::Private::ensure_connected()
 
 		if( !lsock->bind(src)
 		    || !lsock->set_blocking(false)
-		    || !lsock->connect(dst,0/*TODO:flags*/)
+		    || !lsock->connect(dst,0/*TODO?:flags*/)
 		)
 		{
 			delete lsock;
@@ -385,7 +385,7 @@ Session::Session()
 	pvt->local = true;
 }
 
-Session::Session( BdAddr& src, BdAddr& dest )
+Session::Session( const BdAddr& src, const BdAddr& dest )
 {
 	pvt = new Private(this);
 	pvt->src = src;

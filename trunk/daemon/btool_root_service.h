@@ -15,7 +15,6 @@ public:
 
 private:
 	DBus::Connection _bus_connection;
-	DeviceManager	 _device_manager;
 };
 
 }//namespace Bluetool

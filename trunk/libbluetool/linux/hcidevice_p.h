@@ -31,8 +31,8 @@ typedef std::list<Request*> Requests;
 
 struct LocalDevice::Private
 {
-	void init( int dev_id );
-	void open( int dev_id );
+	void init();
+	//void open( int dev_id );
 
 	void post_req( Request* );
 	void fire_event( Request* );
@@ -41,6 +41,7 @@ struct LocalDevice::Private
 	void write_ready( FdNotifier& );
 
 	void req_timedout( Timeout& );
+	void flush_queues();
 
 	void link_ctl_cmd_complete( Request* req );
 
@@ -64,7 +65,7 @@ struct LocalDevice::Private
 	Socket	dd;
 	int	id;
 
-	FdNotifier	notifier;
+	FdNotifier*	notifier;
 	Requests	dispatchq;
 	Requests	waitq;
 
@@ -99,19 +100,19 @@ struct Request
 		COMPLETE
 	} status;
 
-	enum
+	/*enum
 	{
 		LOCAL,
 		REMOTE,
 		CONNECTION,
-	} dest_type;
+	} dest_type;*/
+
 
 	union
 	{
-		LocalDevice* loc;
-		RemoteDevice* rem;
-		Connection* con;
-	} dest;
+		RemoteDevice*	remote;
+		Connection*	conn;
+	} src;
 
 	/* caller tracking
 	*/

@@ -24,6 +24,11 @@ Message::~Message()
 	unref();
 }
 
+ErrorMessage::ErrorMessage()
+{
+	_message = dbus_message_new(DBUS_MESSAGE_TYPE_ERROR);
+}
+
 ErrorMessage::ErrorMessage( Message& to_reply, const char* name, const char* message )
 {
 	_message = dbus_message_new_error(to_reply._message, name, message);

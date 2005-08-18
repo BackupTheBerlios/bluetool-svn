@@ -12,13 +12,21 @@ class Socket
 public:
 
 	Socket( int family, int proto, int type )
+	: _af(family), _proto(proto), _type(type)
 	{
-		_fd = socket(family, proto, type);
+		_fd = socket(_af, _proto, _type);
 	}
 
 	Socket( const Socket& sock )
 	{
 		_fd = dup(sock._fd);
+	}
+
+	virtual bool renew()
+	{
+		close();
+		_fd = socket(_af, _proto, _type);
+		return _fd < 0;
 	}
 
 	virtual ~Socket()
@@ -87,6 +95,9 @@ protected:
 private:
 
 	int _fd;
+	int _af;
+	int _proto;
+	int _type;
 };
 
 #endif//__SOCKET_H

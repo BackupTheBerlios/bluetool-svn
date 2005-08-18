@@ -57,6 +57,10 @@ public:
 
 	inline MessageIter recurse();
 
+	inline MessageIter new_array( u8 type );
+
+	inline void close_container( MessageIter& container );
+
 private:
 	DBusMessageIter _iter;
 
@@ -142,14 +146,34 @@ MessageIter MessageIter::recurse()
 	return iter;
 }
 
+MessageIter MessageIter::new_array( u8 type )
+{
+	MessageIter arr;
+	char* sig;
+
+	switch(type)
+	{
+		case DBUS_TYPE_STRING:	sig=DBUS_TYPE_STRING_AS_STRING;
+	 	break;
+		//todo: add more
+		default:		sig = NULL;
+		break;
+	}
+	dbus_message_iter_open_container(&_iter, DBUS_TYPE_ARRAY, sig, &arr._iter);
+	return arr;
+}
+
+void MessageIter::close_container( MessageIter& container )
+{
+	dbus_message_iter_close_container(&_iter,&container._iter);
+}
+
 /*
 */
 
 class Message
 {
 public:
-	Message();
-
 	Message( const Message& m );
 
 	Message( DBusMessage* );
@@ -185,6 +209,7 @@ public:
 	void terminate();
 
 protected:
+	Message();
 
 	inline void ref();
 
@@ -277,6 +302,8 @@ void Message::unref()
 class ErrorMessage : public Message
 {
 public:
+	ErrorMessage();
+
 	ErrorMessage( Message&, const char* name, const char* message );
 
 	inline const char* name() const;

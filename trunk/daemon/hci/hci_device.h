@@ -5,8 +5,6 @@
 #include <string>
 #include <algorithm>
 
-#include "../btool_names.h"
-
 #include "../../cbus/cbus.h"
 #include "../../libbluetool/hcidevice.h"
 #include "../../libbluetool/bdaddr.h"
@@ -22,10 +20,9 @@ class HciRemote;
 class HciConnection;
 //typedef std::map<u16, HciConnection*>		HciConnPTable;
 
-
 /*	local HCI device
 */
-class HciDevice : private Hci::LocalDevice, public DBus::LocalInterface
+class HciDevice : public Hci::LocalDevice, public DBus::LocalInterface
 {
 public:
 	HciDevice( int dev_id );
@@ -33,6 +30,8 @@ public:
 
 	/*	exported methods
 	*/
+	void Up			( const DBus::CallMessage& );
+	void Down		( const DBus::CallMessage& );
 	void GetProperty	( const DBus::CallMessage& );
 	void SetProperty	( const DBus::CallMessage& );
 
@@ -77,14 +76,14 @@ private:
 		void* cookie
 	);
 
-	void on_get_scan_type
+	void on_get_scan_enable
 	(
 		u16 status,
 		void* cookie,
 		u8 auth
 	);
 
-	void on_set_scan_type
+	void on_set_scan_enable
 	(
 		u16 status,
 		void* cookie
@@ -160,11 +159,29 @@ private:
 		void* cookie
 	);
 
+	void on_inquiry_cancel
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_periodic_inquiry_started
+	(
+		u16 status,
+		void* cookie
+	);
+
+	void on_periodic_inquiry_cancel
+	(
+		u16 status,
+		void* cookie
+	);
+	
 	/*	special handlers
 	*/
-	void on_after_event( void* cookie );
+	void on_after_event( int error, void* cookie );
 
-	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
+	//virtual Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& ) = 0;
 
 private:
 	DBus::Connection	_bus;
@@ -175,12 +192,12 @@ friend class HciConnection;
 
 /*	remote Bluetooth device
 */
-class HciRemote : public Hci::RemoteDevice, public DBus::LocalInterface, public DBus::LocalObject
+class HciRemote : public Hci::RemoteDevice, public DBus::LocalInterface
 {
 public:
 	HciRemote
 	( 
-		const char* obj_name,
+		//const char* obj_name,
 		Hci::LocalDevice* parent,
 		Hci::RemoteInfo& info
 	);
@@ -206,25 +223,32 @@ public:
 	void on_get_version
 	(
 		u16 status,
-		void* cookie
+		void* cookie,
+		const char* lmp_ver,
+		u16 lmp_sub,
+		const char* manufacturer
 	);
 
 	void on_get_features
 	(
 		u16 status,
-		void* cookie
+		void* cookie,
+		const char* features
 	);
 
 	void on_get_clock_offset
 	(
 		u16 status,
-		void* cookie
+		void* cookie,
+		u16 clock_offset
 	);
 
 	/*	special handlers
 	*/
 	Hci::Connection* on_new_connection( Hci::ConnInfo& );
 
+private:
+	DBus::Connection	_bus;
 };
 
 /*	HCI Connection

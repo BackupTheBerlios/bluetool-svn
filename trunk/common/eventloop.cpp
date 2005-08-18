@@ -3,6 +3,9 @@
 #include "timeout.h"
 #include "fdnotifier.h"
 
+#include <exception>
+#include <iostream>
+
 #include <sys/poll.h>
 #include <sys/time.h>
 
@@ -30,17 +33,17 @@ void EventLoop::enter()
 
 		while( fit != g_fdnotifier_plist.end() )
 		{
-//			if( (*fit)->fd() > 0 && (*fit)->flags() )
+		//	if( (*fit)->fd() > 0 && (*fit)->flags() )
 			{
 				fds[a].fd	= (*fit)->fd();
 				fds[a].events	= (*fit)->flags();
 				fds[a].revents	= 0;
 
-				//++a;
+		//		++a;
 			}
 			++fit; ++a;
 		}
-//		nfd = a;
+		//nfd = a;
 
 		//get nearest timeout
 		int wait = 100;
@@ -98,14 +101,23 @@ void EventLoop::enter()
 				if( (*fit)->fd() == fds[i].fd )
 				{
 					(*fit)->state( fds[i].revents );
+					
+					try
+					{
 
-					if( fds[i].revents & POLLIN )
-					{
-						(*fit)->can_read( *(*fit) );
+						if( fds[i].revents & POLLIN )
+						{
+							(*fit)->can_read( *(*fit) );
+						}
+						if( fds[i].revents & POLLOUT )
+						{
+							(*fit)->can_write( *(*fit) );
+						}
 					}
-					if( fds[i].revents & POLLOUT )
+					catch( std::exception& e )
 					{
-						(*fit)->can_write( *(*fit) );
+						std::cerr << "Uncaught exception in event loop: " << e.what() << std::endl;
+						(*fit)->fd(-1);
 					}
 					#if 0
 					if( fds[i].revents & POLLHUP )

@@ -7,6 +7,8 @@
 
 #include <sys/ioctl.h>
 
+#include <iostream>
+
 namespace Bluetool
 {
 
@@ -31,9 +33,9 @@ DeviceManager::DeviceManager()
 	/*	export all methods in the interface
 	*/
 	register_method( DeviceManager, ListDevices );
-	register_method( DeviceManager, EnableDevice );
-	register_method( DeviceManager, DisableDevice );
-	register_method( DeviceManager, ResetDevice );
+//	register_method( DeviceManager, EnableDevice );
+//	register_method( DeviceManager, DisableDevice );
+//	register_method( DeviceManager, ResetDevice );
 
 	/*
 	*/
@@ -66,7 +68,18 @@ DeviceManager::DeviceManager()
 		{
 			int id = list_req.devs[i].dev_id;
 			BdAddr addr = __get_dev_addr(id);
-			_devices[id] = new Device(id,addr);
+
+			try
+			{
+				Device* d = new Device(id,addr);
+				_devices[id] = d;
+
+				this->DeviceAdded(d->oname().c_str());
+			}
+			catch( std::exception& e )
+			{
+				std::cerr << "Unable to create device #" << id << ": " << e.what() << std::endl;
+			}
 		}
 	}
 }
@@ -75,18 +88,20 @@ void DeviceManager::ListDevices( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage reply (msg);
 	DBus::MessageIter rw = reply.w_iter();
+	DBus::MessageIter sa = rw.new_array(DBUS_TYPE_STRING);
 
 	DevicePTable::iterator i = _devices.begin();
 	while( i != _devices.end() )
 	{
 		const char* fullname = i->second->oname().c_str();
-		rw.append_string(fullname);
+		sa.append_string(fullname);
 		++i;
 	}
+	rw.close_container(sa);
 	reply.append(DBUS_TYPE_INVALID);
 	conn().send(reply);
 }
-
+#if 0
 void DeviceManager::EnableDevice( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage reply (msg);
@@ -177,7 +192,24 @@ void DeviceManager::ResetDevice( const DBus::CallMessage& msg )
 	}
 	conn().send(reply);
 }
+#endif
+void DeviceManager::DeviceAdded( const char* name )
+{
+	DBus::SignalMessage sig (oname().c_str(),iname().c_str(),"DeviceAdded");
 
+	sig.append(DBUS_TYPE_STRING, &name, DBUS_TYPE_INVALID);
+
+	conn().send(sig);
+}
+
+void DeviceManager::DeviceRemoved( const char* name )
+{
+	DBus::SignalMessage sig (oname().c_str(),iname().c_str(),"DeviceRemoved");
+
+	sig.append(DBUS_TYPE_STRING, &name, DBUS_TYPE_INVALID);
+
+	conn().send(sig);
+}
 
 Device* DeviceManager::get_device( int dev_id )
 {
@@ -223,10 +255,23 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 		{
 			if(dev) return;
 
-			Hci::LocalDevice::up(sd->dev_id);
+			//Hci::LocalDevice::up(sd->dev_id);
 
-			BdAddr addr = __get_dev_addr(sd->dev_id);
-			_devices[sd->dev_id] = new Device(sd->dev_id,addr);
+			try
+			{
+				usleep(1000000); //it seems the device doesn't come up immediately sometimes :(
+
+				BdAddr addr = __get_dev_addr(sd->dev_id);
+				Device* d = new Device(sd->dev_id,addr);
+				_devices[sd->dev_id] = d;
+
+				this->DeviceAdded(d->oname().c_str());
+			}
+			catch( std::exception& e )
+			{
+				std::cerr << "Unable to create device #" << sd->dev_id << ": " << e.what() << std::endl;
+			}
+
 			break;
 		}
 		case HCI_DEV_UNREG:
@@ -235,22 +280,33 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 
 			DevicePTable::iterator i = _devices.find(sd->dev_id);
 
-			delete i->second;
+			Device* d = i->second;
+			this->DeviceRemoved(d->oname().c_str());
+
+			delete d;
 			_devices.erase(i);
 			break;
 		}
 		case HCI_DEV_UP:
 		{
 			if(!dev) return;
+			
+			try
+			{
+				dev->on_up();
+			}
+			catch( std::exception& e )
+			{
+				std::cerr << "Unable to initialize device #" << sd->dev_id << ": " << e.what() << std::endl;
+			}
 
-			//dev->up();
 			break;
 		}
 		case HCI_DEV_DOWN:
 		{
 			if(!dev) return;
 
-			//dev->down();
+			dev->on_down();
 			break;
 		}
 	}

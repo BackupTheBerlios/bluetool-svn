@@ -8,6 +8,7 @@ int main()
 	try
 	{
 		Bluetool::RootService btool_service;
+		Bluetool::DeviceManager	device_manager;
 
 		EventLoop main_loop;
 
