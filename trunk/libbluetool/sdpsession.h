@@ -37,7 +37,7 @@ public:
 
 	void start_complete_search();
 
-private:
+public:
 
 	SdpEvent on_response;
 

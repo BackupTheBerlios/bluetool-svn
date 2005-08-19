@@ -7,6 +7,8 @@ namespace Bluetool
 {
 	class Device;
 	typedef std::map<int, Device*>	DevicePTable;
+
+	class RemoteDevice;
 }
 
 #include "../libbluetool/bdaddr.h"
@@ -27,6 +29,11 @@ public:
 
 	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
 
+	/*	signals
+	*/
+	void DeviceInRange	( const RemoteDevice& );
+	void DeviceOutOfRange	( const RemoteDevice& );
+
 private:
 	ServiceDatabase	_services;
 };
@@ -35,8 +42,12 @@ class RemoteDevice : public HciRemote, public SdpBrowser, public DBus::LocalObje
 {
 public:
 	RemoteDevice( Device*, Hci::RemoteInfo& );
+	~RemoteDevice();
 
 	Hci::Connection* on_new_connection( Hci::ConnInfo& );
+
+private:
+	Device* _parent;
 };
 
 class Connection : public HciConnection, public DBus::LocalObject

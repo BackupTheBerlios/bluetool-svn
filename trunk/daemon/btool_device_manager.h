@@ -15,6 +15,7 @@ class DeviceManager : public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
 	DeviceManager();
+	~DeviceManager();
 
 	/*	public methods
 	*/

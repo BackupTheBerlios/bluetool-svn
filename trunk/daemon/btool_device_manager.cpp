@@ -84,6 +84,19 @@ DeviceManager::DeviceManager()
 	}
 }
 
+DeviceManager::~DeviceManager()
+{
+	DevicePTable::iterator i = _devices.begin();
+	while( i != _devices.end() )
+	{
+		Device* d = i->second;
+		DeviceRemoved(d->oname().c_str());
+		delete d;
+		_devices.erase(i);
+		++i;
+	}
+}
+
 void DeviceManager::ListDevices( const DBus::CallMessage& msg )
 {
 	DBus::ReturnMessage reply (msg);

@@ -6,9 +6,11 @@
 #define BTOOL_ROOT_NAME		"org.bluetool."
 #define BTOOL_ROOT_PATH		"/org/bluetool/"
 
-#define BTOOL_ERROR_MALFORMED	BTOOL_ROOT_NAME "error.Malformed"
-#define BTOOL_ERROR_TIMEDOUT	BTOOL_ROOT_NAME "error.Timedout"
-#define BTOOL_ERROR_HCI		BTOOL_ROOT_NAME "error.Hci"
+#define BTOOL_ERROR		BTOOL_ROOT_NAME "error"
+
+#define BTOOL_ERROR_MALFORMED	BTOOL_ERROR ".Malformed"
+#define BTOOL_ERROR_TIMEDOUT	BTOOL_ERROR ".Timedout"
+#define BTOOL_ERROR_HCI		BTOOL_ERROR ".Hci"
 
 #define BTOOL_DEVMAN_IFACE	BTOOL_ROOT_NAME "manager"
 #define BTOOL_DEVMAN_PATH	BTOOL_ROOT_PATH "manager"

@@ -136,6 +136,76 @@ void LocalDevice::Private::init()
 	if(!dd.set_filter(f))
 		throw Exception();
 
+	/* when the this device object is created
+	   we update the connections/remote tables
+	   with connections created before the daemon
+	   was launched
+	*/
+
+	hci_conn_list_req *cl;
+
+	char buf[sizeof(hci_conn_list_req) + sizeof(hci_conn_info) * 10];
+
+	cl = (hci_conn_list_req*) buf;
+
+	cl->dev_id = id;
+	cl->conn_num = 10;
+
+	if(ioctl(dd.handle(), HCIGETCONNLIST, buf))
+	{
+		hci_dbg_leave();
+		throw Exception();
+	}
+
+	hci_conn_info* hi = cl->conn_info;
+
+	for( int i = 0; i < cl->conn_num; ++i, ++hi )
+	{
+		char straddr[18] = {0};
+		ba2str(&(hi->bdaddr),straddr);
+
+		RemoteDevPTable::iterator riter = inquiry_cache.find(straddr);
+		RemoteDevice* rptr;
+
+		if( riter == inquiry_cache.end() )
+		{
+			/* save the remote device
+			*/
+			RemoteInfo ri;
+
+			memset(&ri, 0, sizeof(ri));
+			ri.addr = BdAddr(hi->bdaddr.b);
+			ri.pscan_rpt_mode = 0x02;
+				//default value taken from the BlueZ libs
+
+			rptr = parent->on_new_cache_entry(ri);
+			inquiry_cache[straddr] = rptr;
+			
+		}
+		else
+		{
+			rptr = riter->second;
+		}
+		/* now add the connection to the list
+		*/
+
+		ConnPTable::iterator citer = rptr->_connections.find(hi->handle);
+
+		if( citer == rptr->_connections.end() )
+		{
+			/* add connection
+			*/
+			ConnInfo ci;
+			ci.handle = hi->handle;
+			ci.link_type = hi->type;
+			ci.encrypt_mode = 0;
+
+			Connection* cptr = rptr->on_new_connection(ci);
+			if(cptr)
+				rptr->_connections[ci.handle] = cptr;
+		}
+	}
+
 	hci_dbg_leave();	
 }
 
@@ -743,14 +813,14 @@ void LocalDevice::Private::hci_event_received( Request* req )
 			RemoteInfo info =
 			{
 				addr,
-				r->pscan_rep_mode,
-				r->pscan_period_mode,
-				r->pscan_mode,
 				{
 					r->dev_class[0],
 					r->dev_class[1],
 					r->dev_class[2],
 				},
+				r->pscan_rep_mode,
+				r->pscan_period_mode,
+				r->pscan_mode,
 				r->clock_offset
 			};
 

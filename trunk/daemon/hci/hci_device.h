@@ -41,11 +41,6 @@ public:
 	void ExitPeriodicInquiry( const DBus::CallMessage& );
 	void InquiryCache	( const DBus::CallMessage& );
 
-	/*	signals
-	*/
-	void DeviceInRange	( const HciRemote& );
-	void DeviceOutOfRange	( const HciRemote& );
-
 private:
 
 	/*	event handlers
@@ -207,10 +202,10 @@ public:
 	/*	exported methods
 	*/
 	void GetProperty	( const DBus::CallMessage& );
-	void SetProperty	( const DBus::CallMessage& );
 
 	void CreateConnection	( const DBus::CallMessage& ); //creates an ACL connection
 
+private:
 	/*	event handlers
 	*/
 	void on_get_name
@@ -266,6 +261,23 @@ public:
 	void SetProperty	( const DBus::CallMessage& );
 
 	void CreateConnection	( const DBus::CallMessage& );	//creates a SCO connection
+
+private:
+	/*	event handlers
+	*/
+	void on_get_link_quality
+	(
+		u16 status,
+		void* cookie,
+		u8 lq
+	);
+
+	void on_get_rssi
+	(
+		u16 status,
+		void* cookie,
+		i8 rssi		
+	);
 
 private:
 	DBus::Connection	_bus;

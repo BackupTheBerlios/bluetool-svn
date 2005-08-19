@@ -246,11 +246,11 @@ friend class Connection;
 struct RemoteInfo
 {
 	BdAddr addr;
-	u8     pscan_rpt_mode;
-	u8     pscan_per_mode;
-	u8     pscan_mode;
 	u8     dev_class[3];
-	u16    clk_offset;
+	u8     pscan_rpt_mode;	//default is 0x02
+	u8     pscan_per_mode;
+	u8     pscan_mode;	//default is 0
+	u16    clk_offset;	//default is 0
 };
 
 class RemoteDevice
@@ -277,6 +277,8 @@ public:
 
 	inline u16 clock_offset() const;
 	inline void clock_offset( u8 );
+
+	inline LocalDevice* local();
 
 	/*	device properties
 	*/
@@ -371,6 +373,11 @@ friend struct LocalDevice::Private;
 const BdAddr& RemoteDevice::addr() const
 {
 	return _info.addr;
+}
+
+LocalDevice* RemoteDevice::local()
+{
+	return _local_dev;
 }
 
 double RemoteDevice::last_updated() const

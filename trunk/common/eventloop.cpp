@@ -134,6 +134,7 @@ void EventLoop::enter()
 			}
 		}
 	}
+	_dbg("leaving loop");
 }
 
 

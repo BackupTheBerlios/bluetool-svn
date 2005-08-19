@@ -304,7 +304,7 @@ class ErrorMessage : public Message
 public:
 	ErrorMessage();
 
-	ErrorMessage( Message&, const char* name, const char* message );
+	ErrorMessage( const Message&, const char* name, const char* message );
 
 	inline const char* name() const;
 

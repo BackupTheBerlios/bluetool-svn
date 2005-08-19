@@ -38,54 +38,44 @@ HciDevice::~HciDevice()
 
 void HciDevice::Up( const DBus::CallMessage& msg )
 {
-	u16 status;
-	DBus::ReturnMessage reply(msg);
 	try
 	{
 		Hci::LocalDevice::up();
 
-		status = 0;
+		u16 status = 0;
+		DBus::ReturnMessage reply(msg);
+
 		reply.append( DBUS_TYPE_UINT16, &status,
 			      DBUS_TYPE_INVALID
 		);
+		_bus.send(reply);
 	}
 	catch(Hci::Exception& e)
 	{
-		status = 1;
-		const char* strerr = e.what();
-
-		reply.append( DBUS_TYPE_UINT16, &status,
-			      DBUS_TYPE_STRING, &strerr,
-			      DBUS_TYPE_INVALID
-		);
+		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, e.what());
+		_bus.send(err);
 	}
-	_bus.send(reply);
 }
 
 void HciDevice::Down( const DBus::CallMessage& msg )
 {
-	u16 status;
-	DBus::ReturnMessage reply(msg);
 	try
 	{
 		Hci::LocalDevice::down();
 
-		status = 0;
+		u16 status;
+
+		DBus::ReturnMessage reply(msg);
 		reply.append( DBUS_TYPE_UINT16, &status,
 			       DBUS_TYPE_INVALID
 		);
+		_bus.send(reply);
 	}
 	catch(Hci::Exception& e)
 	{
-		status = 1;
-		const char* strerr = e.what();
-
-		reply.append( DBUS_TYPE_UINT16, &status,
-			      DBUS_TYPE_STRING, &strerr,
-			      DBUS_TYPE_INVALID
-		);
+		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, e.what());
+		_bus.send(err);
 	}
-	_bus.send(reply);
 }
 
 /*	device properties management
@@ -201,6 +191,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 		int rx_errors;
 		int tx_bytes;
 		int tx_errors;
+
 		Hci::LocalDevice::get_stats
 		(
 			&status,&rx_bytes,&rx_errors,&tx_bytes,&rx_errors
@@ -215,32 +206,23 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 			       DBUS_TYPE_INVALID
 		);
 		_bus.send(*reply);
-		delete reply;	}
+		delete reply;
+	}
 	
 	else
 	{
-		u16 err = 1;
-		const char* strerr = "No such property";
+		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, "No such property");
+		_bus.send(err);
 
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
 		delete reply;
 	}
 	
 	}
 	catch( std::exception& e )
 	{
-		u16 err = 1;
-		const char* strerr = e.what();
+		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
+		_bus.send(err);
 
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
 		delete reply;
 	}
 }
@@ -389,32 +371,18 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	
 	else
 	{
-		u16 err = 1;
-		const char* strerr = "No such property";
+		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, "No such property");
+		_bus.send(err);
 
-		blue_dbg("error: %s", strerr);
-
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
 		delete reply;
 	}
 	
 	}
 	catch( std::exception& e )
 	{
-		u16 err = 1;
-		const char* strerr = e.what();
+		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
+		_bus.send(err);
 
-		blue_dbg("error: %s", strerr);
-
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
 		delete reply;
 	}
 }
@@ -431,53 +399,6 @@ void HciDevice::CancelInquiry( const DBus::CallMessage& msg )
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage (msg);
 
 	Hci::LocalDevice::cancel_inquiry(reply, HCI_TIMEOUT);
-}
-
-/*	signals
-*/
-
-void HciDevice::DeviceInRange( const HciRemote& hr )
-{
-	/* todo: I don't like this way of sending signals
-	*/
-	DBus::SignalMessage sig
-	(
-		BTOOL_DEVMAN_PATH, //TODO
-		iname().c_str(),
-		"DeviceInRange"
-	);
-
-	const char* name = "b00rp";//hr.oname().c_str();
-
-	sig.append
-	(
-		DBUS_TYPE_STRING, &(name),
-		DBUS_TYPE_INVALID
-	);
-
-	_bus.send(sig);
-}
-
-void HciDevice::DeviceOutOfRange( const HciRemote& hr )
-{
-	/* todo: I don't like this way of sending signals
-	*/
-	DBus::SignalMessage sig
-	(
-		BTOOL_DEVMAN_PATH, //TODO
-		iname().c_str(),
-		"DeviceOutOfRange"
-	);
-
-	const char* name = "b00rp";//hr.oname().c_str();
-
-	sig.append
-	(
-		DBUS_TYPE_STRING, &(name),
-		DBUS_TYPE_INVALID
-	);
-
-	_bus.send(sig);
 }
 
 #if 0
@@ -825,28 +746,7 @@ void HciDevice::on_after_event( int error, void* cookie )
 	}
 	delete reply;
 }
-#if 0
-Hci::RemoteDevice* HciDevice::on_new_cache_entry( Hci::RemoteInfo& info )
-{
-	/* bluetooth addresses contain colons, which are not 
-	   allowed in the DBUS specification
-	*/
-	std::string valid_addr = info.addr.to_string();
-	for( uint i = 0; i < valid_addr.length(); ++i)
-	{
-		if(valid_addr[i] == ':')
-			valid_addr[i] = '_';
-	}
-	std::string path = Bluetool::Device::generate_dev_path(addr());
-	std::string rem_name = path + BTOOL_REM_SUBDIR + valid_addr;
 
-	HciRemote* hr = new HciRemote(rem_name.c_str(),this,info);
-
-	this->DeviceInRange(*hr);
-
-	return hr;
-}
-#endif
 /*	remote device
 */
 
@@ -862,18 +762,12 @@ HciRemote::HciRemote
 	//DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
-	register_method( HciRemote, SetProperty );
 }
 
 HciRemote::~HciRemote()
 {}
 
 void HciRemote::GetProperty( const DBus::CallMessage& msg )
-{
-}
-
-
-void HciRemote::SetProperty( const DBus::CallMessage& msg )
 {
 }
 
@@ -891,6 +785,12 @@ void HciRemote::on_get_name
 	const char* name
 )
 {
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(name),
+		       DBUS_TYPE_INVALID
+	);
 }
 
 void HciRemote::on_get_version
@@ -898,10 +798,18 @@ void HciRemote::on_get_version
 	u16 status,
 	void* cookie,
 	const char* lmp_ver,
-	u16 lmp_sub,
+	u16 lmp_subver,
 	const char* manufacturer
 )
 {
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(lmp_ver),
+		       DBUS_TYPE_UINT16, &(lmp_subver),
+		       DBUS_TYPE_STRING, &(manufacturer),
+		       DBUS_TYPE_INVALID
+	);
 }
 
 void HciRemote::on_get_features
@@ -911,6 +819,12 @@ void HciRemote::on_get_features
 	const char* features
 )
 {
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(features),
+		       DBUS_TYPE_INVALID
+	);
 }
 
 void HciRemote::on_get_clock_offset
@@ -920,6 +834,12 @@ void HciRemote::on_get_clock_offset
 	u16 clock_offset
 )
 {
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_UINT16, &(clock_offset),
+		       DBUS_TYPE_INVALID
+	);
 }
 
 #if 0
@@ -982,51 +902,7 @@ void HciRemote::GetProperty( const DBus::CallMessage& msg )
 		delete reply;
 	}
 }
-
-void HciRemote::SetProperty( const DBus::CallMessage& msg )
-{
-	DBus::MessageIter i = msg.r_iter();
-	std::string property = i.get_string();
-	++i;
-
-	blue_dbg("method SetProperty(%s) called on %s",property.c_str(),oname().c_str());
-
-	DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
-
-	try
-	{
-
-//	if( property == "auth_enable" )	
-//		Hci::LocalDevice::get_auth_enable(reply, HCI_TIMEOUT);
-//	else
-	{
-		u16 err = 1;
-		const char* strerr = "No such property";
-
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
-		delete reply;
-	}
-	
-	}
-	catch( Hci::Exception& e )
-	{
-		u16 err = 1;
-		const char* strerr = e.what();
-
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_STRING, &strerr,
-			       DBUS_TYPE_INVALID
-		);
-		_bus.send(*reply);
-		delete reply;
-	}
-}
 #endif
-
 
 HciConnection::HciConnection
 (
@@ -1048,8 +924,66 @@ HciConnection::~HciConnection()
 
 void HciConnection::GetProperty( const DBus::CallMessage& msg )
 {
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage( msg );
+
+	try
+	{
+		DBus::MessageIter i = msg.r_iter();
+		std::string property = i.get_string();
+
+		if( property == "link_quality" )	
+			Hci::Connection::get_link_quality(reply, HCI_TIMEOUT);
+		else if( property == "rssi" )
+			Hci::Connection::get_rssi(reply, HCI_TIMEOUT);
+		
+		else
+		{
+			DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, "No such property");
+			_bus.send(err);
+	
+			delete reply;
+		}
+	
+	}
+	catch( std::exception& e )
+	{
+		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
+		_bus.send(err);
+
+		delete reply;
+	}
 }
 
 void HciConnection::SetProperty( const DBus::CallMessage& msg )
 {
+}
+
+void HciConnection::on_get_link_quality
+(
+	u16 status,
+	void* cookie,
+	u8 lq
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(lq),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciConnection::on_get_rssi
+(
+	u16 status,
+	void* cookie,
+	i8 rssi		
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   &(rssi),
+		       DBUS_TYPE_INVALID
+	);
 }

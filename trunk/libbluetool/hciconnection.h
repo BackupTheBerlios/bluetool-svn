@@ -111,14 +111,14 @@ public:
 		u16 status,
 		void* cookie,
 		u8 lq
-	){}
+	) = 0;
 
 	virtual void on_get_rssi
 	(
 		u16 status,
 		void* cookie,
-		u8 rssi
-	){}
+		i8 rssi
+	) = 0;
 
 	virtual void on_get_transmit_power
 	(
@@ -138,6 +138,7 @@ public:
 	*/
 
 private:
+	LocalDevice*	_from;
 	RemoteDevice*	_to;
 	ConnInfo	_info;
 

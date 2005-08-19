@@ -1,10 +1,17 @@
 #ifndef __BTOOL_PAN_SERVICE_H
 #define __BTOOL_PAN_SERVICE_H
 
+#include <sys/types.h> //for pid_t
+
 #include "../../../libbluetool/bdaddr.h"
 #include "../../../cbus/cbus.h"
 #include "../../btool_names.h"
 #include "../btool_service.h"
+
+#define PAN_SVC_NAME "pan"
+#define PAN_CMD "pand"
+
+#define BTOOL_PAN_ERROR	(BTOOL_SVC_ROOT_NAME PAN_SVC_NAME ".error")
 
 class PanService_i : public DBus::LocalInterface
 {
@@ -32,6 +39,7 @@ private:
 
 private:
 	BdAddr	_addr;
+	pid_t	_pid;
 };
 
 #endif//__BTOOL_PAN_SERVICE_H
