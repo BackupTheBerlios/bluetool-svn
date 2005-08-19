@@ -93,15 +93,14 @@ void HciDevice::Down( const DBus::CallMessage& msg )
 
 void HciDevice::GetProperty( const DBus::CallMessage& msg )
 {
-	DBus::MessageIter i = msg.r_iter();
-	std::string property = i.get_string();
-
-	blue_dbg("method GetProperty(%s) called on hci%d",property.c_str(),id());
-
 	DBus::ReturnMessage *reply = new DBus::ReturnMessage( msg );
 
 	try
 	{
+		DBus::MessageIter i = msg.r_iter();
+		std::string property = i.get_string();
+
+		blue_dbg("method GetProperty(%s) called on hci%d",property.c_str(),id());
 
 	if( property == "auth_enable" )	
 		Hci::LocalDevice::get_auth_enable(reply, HCI_TIMEOUT);
@@ -248,16 +247,15 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 
 void HciDevice::SetProperty( const DBus::CallMessage& msg )
 {
-	DBus::MessageIter i = msg.r_iter();
-	std::string property = i.get_string();
-	++i;
-
-	blue_dbg("method SetProperty(%s) called on hci%d",property.c_str(),id());
-
 	DBus::ReturnMessage *reply = new DBus::ReturnMessage(msg);
 
 	try
 	{
+		DBus::MessageIter i = msg.r_iter();
+		std::string property = i.get_string();
+		++i;
+	
+		blue_dbg("method SetProperty(%s) called on hci%d",property.c_str(),id());
 
 	if( property == "auth_enable" )
 	{
@@ -323,10 +321,10 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	else
 	if( property == "class" )
 	{
-		u8 major = i.get_byte(); ++i;
-		u8 minor = i.get_byte(); ++i;
-		u8 ver   = i.get_byte();
-		Hci::LocalDevice::set_class(major,minor,ver,reply,HCI_TIMEOUT);
+		u8 major     = i.get_byte(); ++i;
+		u8 minor     = i.get_byte(); ++i;
+		u8 service   = i.get_byte();
+		Hci::LocalDevice::set_class(major,minor,service,reply,HCI_TIMEOUT);
 	}
 	
 	else
@@ -924,18 +922,6 @@ void HciRemote::on_get_clock_offset
 {
 }
 
-
-Hci::Connection* HciRemote::on_new_connection( Hci::ConnInfo& ci )
-{
-	char path[256];
-//	snprintf(path,sizeof(path),"%s"BTOOL_CONN_SUBDIR"0x%04X",oname().c_str(),ci.handle);
-
-//	HciConnection* c = new HciConnection(path, this, ci);
-
-	return NULL;
-}
-
-
 #if 0
 void HciRemote::update( u8 pscan_rpt_mode, u8 pscan_mode, u16 clk_offset )
 {
@@ -1044,13 +1030,12 @@ void HciRemote::SetProperty( const DBus::CallMessage& msg )
 
 HciConnection::HciConnection
 (
-	const char* obj_name,
 	Hci::RemoteDevice* parent,
 	Hci::ConnInfo& info
 )
 :	Hci::Connection( parent, info ),
 	DBus::LocalInterface( BTOOL_HCICONN_IFACE ),
-	DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
+	_bus( DBus::Connection::SystemBus() )
 {
 	register_method( HciConnection, GetProperty );
 	register_method( HciConnection, SetProperty );

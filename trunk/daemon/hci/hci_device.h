@@ -243,22 +243,17 @@ public:
 		u16 clock_offset
 	);
 
-	/*	special handlers
-	*/
-	Hci::Connection* on_new_connection( Hci::ConnInfo& );
-
 private:
 	DBus::Connection	_bus;
 };
 
 /*	HCI Connection
 */
-class HciConnection : public Hci::Connection, public DBus::LocalInterface, public DBus::LocalObject
+class HciConnection : public Hci::Connection, public DBus::LocalInterface
 {
 public:
 	HciConnection
 	(
-		const char* obj_name,
 		Hci::RemoteDevice* parent,
 		Hci::ConnInfo& info
 	);
@@ -271,6 +266,9 @@ public:
 	void SetProperty	( const DBus::CallMessage& );
 
 	void CreateConnection	( const DBus::CallMessage& );	//creates a SCO connection
+
+private:
+	DBus::Connection	_bus;
 };
 
 #endif//__BTOOL_HCI_DEVICE_H

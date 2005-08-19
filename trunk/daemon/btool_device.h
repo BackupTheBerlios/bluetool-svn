@@ -35,6 +35,14 @@ class RemoteDevice : public HciRemote, public SdpBrowser, public DBus::LocalObje
 {
 public:
 	RemoteDevice( Device*, Hci::RemoteInfo& );
+
+	Hci::Connection* on_new_connection( Hci::ConnInfo& );
+};
+
+class Connection : public HciConnection, public DBus::LocalObject
+{
+public:
+	Connection( RemoteDevice*, Hci::ConnInfo& );
 };
 
 }//namespace Bluetool
