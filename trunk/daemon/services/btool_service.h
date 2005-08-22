@@ -7,15 +7,17 @@
 #include "../../cbus/cbus.h"
 #include "../btool_names.h"
 
-class BluetoolService : public DBus::LocalInterface, public DBus::LocalObject
+namespace Bluetool
 {
-protected:
-	BluetoolService( const std::string& dbus_root, const std::string& conf_root, const std::string& name );
 
+class Service : public DBus::LocalInterface, public DBus::LocalObject
+{
 public:
-	virtual ~BluetoolService();
+	Service( const std::string& name, const std::string& dbus_root, const std::string& conf_root );
 
-	inline bool started();
+	virtual ~Service();
+
+	bool started();
 
 	/*	methods inherited by all services
 	*/
@@ -34,19 +36,17 @@ private:
 private:
 	/*	hooks for the various services
 	*/
-	virtual bool start_service() = 0;
-	virtual bool stop_service() = 0;
+//	virtual bool start_service() = 0;
+//	virtual bool stop_service() = 0;
 
 protected:
 	ConfigFile settings;
 
 private:
-	bool _started;
+	struct Private;
+	Private* pvt;
 };
 
-bool BluetoolService::started()
-{
-	return _started;
-}
+}//namespace Bluetool
 
 #endif//__BTOOL_SERVICE_H

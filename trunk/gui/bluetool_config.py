@@ -754,9 +754,9 @@ class BluetoolCfgPanel:
 		self['bt_devclass_tgb'].set_label(self.ui_to_class())
 		self['bt_devclass_tgb'].set_active(False)
 
-	def on_close_devclass(self,widget):
+	def on_close_devclass(self,widget,data):
 		self['bt_devclass_tgb'].set_active(False)
-		return False
+		return True
 
 	def set_dev_auth(self):
 		if self.curr_dev is None: return

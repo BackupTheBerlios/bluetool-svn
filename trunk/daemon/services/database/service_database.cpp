@@ -25,12 +25,14 @@ ServiceDatabase::ServiceDatabase( const char* dbus_root, const BdAddr& dev_addr 
 
 	_conf_root = BLUETOOL_CONF_PATH + uscore_addr +"/";
 
-	_pan_service = new PanService(dbus_root,_conf_root,dev_addr);
+	Service* new_service = ServiceLoader::load_service("demoservice",dbus_root,_conf_root);
+
+//	_pan_service = new PanService(dbus_root,_conf_root,dev_addr);
 }
 
 ServiceDatabase::~ServiceDatabase()
 {
-	delete _pan_service;
+//	delete _pan_service;
 }
 
 }//namespace Bluetool

@@ -8,7 +8,6 @@ CPPS = $(wildcard *.cpp \
 		  ./sdp/*.cpp \
 		  ./services/*.cpp \
 		  ./services/database/*.cpp \
-		  ./services/pan/*.cpp \
 		  ../cbus/*.cpp \
 		  ../common/*.cpp \
 		  ../libbluetool/linux/*.cpp \

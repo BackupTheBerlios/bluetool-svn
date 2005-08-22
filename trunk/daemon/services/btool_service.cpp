@@ -1,32 +1,113 @@
+#include <Python.h>
 #include "btool_service.h"
 
-BluetoolService::BluetoolService
+namespace Bluetool
+{
+
+struct Service::Private
+{
+	bool started;
+
+	PyObject* module;
+	PyObject* service;
+};
+
+Service::Service
 (
+	const std::string& name,
 	const std::string& dbus_root,
-	const std::string& conf_root,
-	const std::string& name
+	const std::string& conf_root
 )
-:	DBus::LocalInterface( BTOOL_SVC_IFACE ),
+:	/* load interface (common to all services)
+	*/
+	DBus::LocalInterface( BTOOL_SVC_IFACE ), //TODO: create a service-specific interface too
+
+	/* create service object
+	*/
 	DBus::LocalObject
 	(
 		(dbus_root + BTOOL_SVC_SUBDIR + name).c_str(),
 		DBus::Connection::SystemBus()
 	),
-	settings( (conf_root + name + ".conf").c_str() ),
 
-	_started(false)
+	/* load configuration file
+	*/
+	settings( (conf_root + name + ".conf").c_str() )
 {
-	register_method( BluetoolService, GetOption );
-	register_method( BluetoolService, SetOption );
-	register_method( BluetoolService, Stop );
+	pvt = new Private();
+	pvt->started=false;
+	pvt->module=NULL;
+	pvt->service=NULL;
+
+	/* register standard methods
+	*/
+	register_method( Service, Start );
+	register_method( Service, GetOption );
+	register_method( Service, SetOption );
+	register_method( Service, Stop );
+
+	/* add the service path to python's search path
+	*/	
+	PyRun_SimpleString
+	(
+		"import sys\n"
+		"import os\n"
+		"sys.path.append(os.getcwd()+'/services')\n"
+		//"print sys.path\n"
+	);
+
+	/* load module into embedded interpreter
+	*/
+	PyObject* pname = PyString_FromString(name.c_str());
+	pvt->module = PyImport_Import(pname);
+	Py_DECREF(pname);
+
+	if(!pvt->module)
+	{
+		PyErr_Print();
+		throw "unable to load module";
+	}
+
+	/* get a dictionary to browse module contents
+	*/
+	PyObject* dict = PyModule_GetDict(pvt->module);
+	std::string service = "bluetool_"+name;
+	PyObject* svc_item = PyDict_GetItemString(dict,service.c_str());
+
+	if(!svc_item)
+	{
+		Py_DECREF(pvt->module);
+
+		PyErr_Print();
+		throw "unable to load module";
+	}
+
+	/* create service instance
+	*/
+	pvt->service = PyObject_CallObject(svc_item, NULL);
+
+	if(!pvt->service)
+	{
+		Py_DECREF(pvt->module);
+
+		PyErr_Print();
+		throw "unable to create service instance";
+	}
 }
 
-BluetoolService::~BluetoolService()
+Service::~Service()
 {
+	delete pvt;
 //	conn().disconnect();
 }
 
-void BluetoolService::GetOption( const DBus::CallMessage& msg )
+
+bool Service::started()
+{
+	return pvt->started;
+}
+
+void Service::GetOption( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -47,7 +128,7 @@ void BluetoolService::GetOption( const DBus::CallMessage& msg )
 	{}
 }
 
-void BluetoolService::SetOption( const DBus::CallMessage& msg )
+void Service::SetOption( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -70,22 +151,31 @@ void BluetoolService::SetOption( const DBus::CallMessage& msg )
 	{}
 }
 
-void BluetoolService::Start( const DBus::CallMessage& msg )
+void Service::Start( const DBus::CallMessage& msg )
 {
 	bool res;
 
-	if(_started)
+	if(pvt->started)
 	{
 		res = true;
 	}
 	else
 	{
-		res = this->start_service();
-		if(res)
+		PyObject* ret = PyObject_CallMethod(pvt->service, "Start", NULL);
+
+		if(!PyBool_Check(ret))
 		{
-			_started = true;
-			this->ServiceStarted();
+			throw "Start() returned non boolean";
 		}
+		else
+		{
+			if(ret == Py_True)
+			{
+				pvt->started = true;
+				this->ServiceStarted();
+			}
+		}
+		Py_DECREF(ret);
 	}
 	DBus::ReturnMessage reply(msg);
 
@@ -95,22 +185,31 @@ void BluetoolService::Start( const DBus::CallMessage& msg )
 	conn().send(reply);
 }
 
-void BluetoolService::Stop( const DBus::CallMessage& msg )
+void Service::Stop( const DBus::CallMessage& msg )
 {
 	bool res;
 
-	if(!_started)
+	if(!pvt->started)
 	{
 		res = true;
 	}
 	else
 	{
-		res = this->stop_service();
-		if(res)
+		PyObject* ret = PyObject_CallMethod(pvt->service, "Stop", NULL);
+
+		if(!PyBool_Check(ret))
 		{
-			_started = false;
-			this->ServiceStopped();
+			throw "Stop() returned non boolean";
 		}
+		else
+		{
+			if(ret == Py_True)
+			{
+				pvt->started = false;
+				this->ServiceStopped();
+			}
+		}
+		Py_DECREF(ret);
 	}
 	DBus::ReturnMessage reply(msg);
 
@@ -120,7 +219,7 @@ void BluetoolService::Stop( const DBus::CallMessage& msg )
 	conn().send(reply);
 }
 
-void BluetoolService::ServiceStarted()
+void Service::ServiceStarted()
 {
 	const char* sname = oname().c_str();
 
@@ -132,7 +231,7 @@ void BluetoolService::ServiceStarted()
 	conn().send(msg);
 }
 
-void BluetoolService::ServiceStopped()
+void Service::ServiceStopped()
 {
 	const char* sname = oname().c_str();
 
@@ -143,3 +242,5 @@ void BluetoolService::ServiceStopped()
 	);
 	conn().send(msg);
 }
+
+}//namespace Bluetool

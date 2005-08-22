@@ -1,8 +1,10 @@
 #ifndef __BTOOL_SERVICEDB_H
 #define __BTOOL_SERVICEDB_H
 
+#include "../btool_service_loader.h"
+#include "../../btool_names.h"
 #include "../../../cbus/cbus.h"
-#include "../pan/pan_service.h"
+#include "../../../libbluetool/bdaddr.h"
 
 namespace Bluetool
 {
@@ -18,9 +20,6 @@ public:
 private:
 	std::string _conf_root;
 
-	/* list of services
-	*/
-	PanService* _pan_service;
 };
 
 }//namespace Bluetool

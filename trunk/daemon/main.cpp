@@ -4,6 +4,7 @@
 
 #include "../common/eventloop.h"
 #include "btool_root_service.h"
+#include "services/btool_service_loader.h"
 
 EventLoop main_loop;
 
@@ -19,10 +20,14 @@ int main()
 
 	try
 	{
+		Bluetool::ServiceLoader::init();
+
 		Bluetool::RootService btool_service;
 		Bluetool::DeviceManager	device_manager;
 
 		main_loop.enter();
+
+		Bluetool::ServiceLoader::finalize();
 	}
 	catch( std::exception& e )
 	{
