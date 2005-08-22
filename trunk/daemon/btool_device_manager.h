@@ -30,6 +30,8 @@ private:
 	*/
 	void DeviceAdded( const char* name );
 	void DeviceRemoved( const char* name );
+	void DeviceUp( const char* name );
+	void DeviceDown( const char* name );
 
 private:
 

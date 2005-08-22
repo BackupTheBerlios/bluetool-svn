@@ -61,6 +61,12 @@ public:
 
 	int get_stats(int*,int*,int*,int*,int*);
 
+	int get_link_mode( u32* );
+	int set_link_mode( u32 );
+
+	int get_link_policy( u32* );
+	int set_link_policy( u32 );
+
 	/*	device properties
 	*/
 	void get_auth_enable( void* cookie, int timeout );

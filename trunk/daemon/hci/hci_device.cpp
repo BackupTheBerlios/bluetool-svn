@@ -109,16 +109,6 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	}
 	
 	else
-	if( property == "link_mode" )
-	{
-	}
-	
-	else
-	if( property == "link_policy" )
-	{
-	}
-	
-	else
 	if( property == "address" )
 		Hci::LocalDevice::get_address(reply, HCI_TIMEOUT);
 	else
@@ -183,6 +173,37 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	/*	synchronous methods
 		(they're available only as ioctls which cannot be unblocked)
 	*/
+	
+	else
+	if( property == "link_mode" )
+	{
+		u32 lm;
+
+		Hci::LocalDevice::get_link_mode(&lm);
+		u16 status = 0;
+		reply->append( DBUS_TYPE_UINT16, &status,
+			       DBUS_TYPE_UINT32, &lm,
+			       DBUS_TYPE_INVALID
+		);
+		_bus.send(*reply);
+		delete reply;
+	}
+	
+	else
+	if( property == "link_policy" )
+	{
+		u32 lp;
+
+		Hci::LocalDevice::get_link_policy(&lp);
+		u16 status = 0;
+		reply->append( DBUS_TYPE_UINT16, &status,
+			       DBUS_TYPE_UINT32, &lp,
+			       DBUS_TYPE_INVALID
+		);
+		_bus.send(*reply);
+		delete reply;
+	}
+
 	else
 	if( property == "stats" )
 	{
@@ -265,31 +286,9 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 		u8 type = i.get_byte();
 		Hci::LocalDevice::set_scan_enable(type,reply,HCI_TIMEOUT);
 	}
-	
-//	else
-//	if( property == "inquiry_scan_enable" )
-//	{
-	//	bool enable = i.get_bool();
-	//	Hci::LocalDevice::set_iscan_enable(enable, reply);	
-//	}
-	
+
 	else
 	if( property == "packet_type" )
-	{
-	}
-	
-	else
-	if( property == "link_mode" )
-	{
-	}
-	
-	else
-	if( property == "link_policy" )
-	{
-	}
-	
-	else
-	if( property == "address" )
 	{
 	}
 
@@ -348,27 +347,39 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	if( property == "page_scan_interval" )
 	{
 	}
+
 	else
-	
 	if( property == "afh_mode" )
 	{
 	}
-	
+
 	else
-	if( property == "features" )
+	if( property == "link_mode" )
 	{
+		u32 lm = i.get_uint32();
+
+		Hci::LocalDevice::set_link_mode(lm);
+		u16 status = 0;
+		reply->append( DBUS_TYPE_UINT16, &status,
+			       DBUS_TYPE_INVALID
+		);
+		_bus.send(*reply);
+		delete reply;
 	}
 	
 	else
-	if( property == "version_info" )
+	if( property == "link_policy" )
 	{
-	}
-	
-	else
-	if( property == "revision_info" )
-	{
-	}
-	
+		u32 lp = i.get_uint32();
+
+		Hci::LocalDevice::set_link_policy(lp);
+		u16 status = 0;
+		reply->append( DBUS_TYPE_UINT16, &status,
+			       DBUS_TYPE_INVALID
+		);
+		_bus.send(*reply);
+		delete reply;
+	}	
 	else
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, "No such property");
@@ -735,10 +746,12 @@ void HciDevice::on_after_event( int error, void* cookie )
 
 		DBus::ErrorMessage emsg;
 		emsg.name(BTOOL_ERROR_HCI);
-		emsg.append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
+//		emsg.append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
 		emsg.reply_serial(reply->reply_serial());
 
 		_bus.send(emsg);
+		reply->append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
+		_bus.send(*reply);
 	}
 	else
 	{

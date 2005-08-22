@@ -41,7 +41,9 @@ public:
 
 	int close()
 	{
-		return ::close(_fd);
+		int f = _fd;
+		_fd = -1;
+		return ::close(f);
 	}
 
 	int send( const char* buf, int len, int flags = 0 )

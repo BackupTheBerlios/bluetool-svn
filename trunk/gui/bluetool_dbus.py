@@ -10,6 +10,7 @@ class BluetoolDeviceProxy:
 		self.obj = self.bus.get_object('org.bluetool',dbus_path)
 		self.hci = dbus.Interface(self.obj, 'org.bluetool.device.hci')
 		self.path = dbus_path
+		self.up = False
 
 	def __getitem__(self,key):
 		proplist = self.hci.GetProperty(key)
@@ -21,17 +22,31 @@ class BluetoolDeviceProxy:
 class BluetoolManagerProxy:
 	def __init__(self,view):
 		try:
+			#
+			#	create proxy for remote object (the manager)
+			#
 			self.bus = dbus.SystemBus()
 			self.obj = self.bus.get_object('org.bluetool','/org/bluetool/manager')
 			self.iface = dbus.Interface(self.obj,'org.bluetool.manager')
 
-			self.devices = []
+			#
+			#	bind signals to local hook functions
+			#
+			self.iface.connect_to_signal('DeviceAdded',self.DeviceAdded);
+			self.iface.connect_to_signal('DeviceRemoved',self.DeviceRemoved);
+			self.iface.connect_to_signal('DeviceUp',self.DeviceUp);
+			self.iface.connect_to_signal('DeviceDown',self.DeviceUp);
+
+			#
+			#	get a list of devices
+			#
+			self.view = view
+
+			self.devices = {}
 			devlist = self.iface.ListDevices()
 			for devpath in devlist:
-				print "-> found device object @", devpath
-				self.devices.append( BluetoolDeviceProxy(devpath) )
-
-			self.view = view
+				self.DeviceAdded(devpath) 	
+				# WARNING: it's not nice to call an event handler explicitly
 
 		except dbus.dbus_bindings.DBusException:
 			dialog = gtk.MessageDialog(
@@ -41,37 +56,38 @@ class BluetoolManagerProxy:
 				buttons        = gtk.BUTTONS_OK,
 				message_format = "Unable to connect to Bluetool daemon"
 			)
-			dialog.connect('response',lambda a,b: gtk.main_quit())
+			dialog.connect('response',lambda x,y: gtk.main_quit())
 			dialog.show()
 			
-		#
-		#	bind signals to local hook functions: TODO
-		#
-		#self.bus.add_signal_receiver(self.DeviceAdded,self.iname,self.sname,self.pname)
-		#self.bus.add_signal_receiver(self.DeviceRemoved,'DeviceRemoved',self.iname)
-		self.iface.connect_to_signal('DeviceAdded',self.DeviceAdded);
-		self.iface.connect_to_signal('DeviceRemoved',self.DeviceRemoved);
-
 	#
 	#	signal handlers
 	#
 	def DeviceAdded(self,devpath):
 		print "-> added device @",devpath
 		dev = BluetoolDeviceProxy(devpath)
-		self.devices.append(dev)
+		self.devices[devpath] = dev
 
 		self.view.on_device_added(dev)
 
 	def DeviceRemoved(self,devpath):
-		for dev in self.devices:
-			if dev.path == devpath:
-				i = self.devices.index(dev)
-				del(self.devices[i])
-				print "-> removed device @",dev.path
+		if self.devices.has_key(devpath):
+			print "-> removed device @",devpath
+			self.view.on_device_removed(self.devices[devpath])
+			self.devices.pop(devpath)
 
-				self.view.on_device_removed(i)
+	def DeviceUp(self,devpath):
+		print "-> enabled device @",devpath
+		if self.devices.has_key(devpath):
+			self.devices[devpath].up = True
+			self.view.on_device_up(self.devices[devpath])
+		else: print "error: device not listed"
 
-
+	def DeviceDown(self,devpath):
+		print "-> disabled device @",devpath
+		if self.devices.has_key(devpath):
+			self.devices[devpath].up = False
+			self.view.on_device_down(self.devices[devpath])
+		else: print "error: device not listed"
 	#
 	#	signal hooks
 	#

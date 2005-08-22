@@ -61,6 +61,10 @@ struct LocalDevice::Private
 
 	/**/
 
+	~Private();
+
+	/**/
+
 	BdAddr	ba;
 	Socket	dd;
 	int	id;

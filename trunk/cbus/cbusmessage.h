@@ -55,6 +55,10 @@ public:
 
 	inline u8   get_byte();
 
+	inline bool append_uint32( u32 u );
+
+	inline u32 get_uint32();
+
 	inline MessageIter recurse();
 
 	inline MessageIter new_array( u8 type );
@@ -135,6 +139,21 @@ u8 MessageIter::get_byte()
 		throw Error(DBUS_ERROR_INVALID_ARGS,"Byte value expected");
 
  	u8 ret;
+	dbus_message_iter_get_basic(&_iter, &ret);
+ 	return ret;
+}
+
+bool MessageIter::append_uint32( u32 u )
+{
+	return dbus_message_iter_append_basic(&_iter, DBUS_TYPE_UINT32, &u);
+}
+
+u32 MessageIter::get_uint32()
+{	
+	if(type() != DBUS_TYPE_UINT32)
+		throw Error(DBUS_ERROR_INVALID_ARGS,"32-bit unsigned integer value expected");
+
+ 	u32 ret;
 	dbus_message_iter_get_basic(&_iter, &ret);
  	return ret;
 }

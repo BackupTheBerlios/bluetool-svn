@@ -224,6 +224,24 @@ void DeviceManager::DeviceRemoved( const char* name )
 	conn().send(sig);
 }
 
+void DeviceManager::DeviceUp( const char* name )
+{
+	DBus::SignalMessage sig (oname().c_str(),iname().c_str(),"DeviceUp");
+
+	sig.append(DBUS_TYPE_STRING, &name, DBUS_TYPE_INVALID);
+
+	conn().send(sig);
+}
+
+void DeviceManager::DeviceDown( const char* name )
+{
+	DBus::SignalMessage sig (oname().c_str(),iname().c_str(),"DeviceDown");
+
+	sig.append(DBUS_TYPE_STRING, &name, DBUS_TYPE_INVALID);
+
+	conn().send(sig);
+}
+
 Device* DeviceManager::get_device( int dev_id )
 {
 	DevicePTable::iterator i = _devices.find(dev_id);
@@ -307,6 +325,8 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 			try
 			{
 				dev->on_up();
+
+				this->DeviceUp(dev->oname().c_str());
 			}
 			catch( std::exception& e )
 			{
@@ -318,6 +338,8 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 		case HCI_DEV_DOWN:
 		{
 			if(!dev) return;
+
+			this->DeviceDown(dev->oname().c_str());
 
 			dev->on_down();
 			break;

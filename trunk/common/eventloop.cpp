@@ -113,24 +113,28 @@ void EventLoop::enter()
 						{
 							(*fit)->can_write( *(*fit) );
 						}
+
 					}
 					catch( std::exception& e )
 					{
 						std::cerr << "Uncaught exception in event loop: " << e.what() << std::endl;
-						(*fit)->fd(-1);
+						//(*fit)->fd(-1);
 					}
-					#if 0
-					if( fds[i].revents & POLLHUP )
+					if( fds[i].revents & POLLERR || fds[i].revents & POLLHUP || fds[i].revents == 32)
 					{
-					}
-					if( fds[i].revents & POLLERR )
-					{
-					}
-					#endif
+						/* remove it NOW or we enter an infinite loop
+						*/
+						FdNotifierPList::iterator next = fit;
+						++next;
+						g_fdnotifier_plist.erase(fit);
+						fit = next;
 
+						continue;
+					}
 					++checked;
+					++i;
 				}
-				++i; ++fit;
+				++fit;
 			}
 		}
 	}

@@ -45,18 +45,18 @@ void LocalDevice::on_up()
 {
 	hci_dbg_enter();
 
-	hci_dev_info di;
+	/*hci_dev_info di;
 	do
 	{
 		if(hci_devinfo(id(), &di) < 0)
 			throw Exception();
 	}
-	while(!hci_test_bit(HCI_UP, &di.flags));
-	//no, I don't like it, but I'm in a fucking hurry
+	while(!hci_test_bit(HCI_UP, &di.flags));*/
+	//no, I don't like this, but I'm in a fucking hurry
 
 	usleep(1000000);
 
-	pvt->dd.renew();
+	pvt->dd.renew(); // creates a new control socket
 	pvt->init();
 
 	hci_dbg_leave();
@@ -113,6 +113,28 @@ Request::~Request()
 /*
 */
 
+LocalDevice::Private::~Private()
+{
+	Requests::iterator rqi = dispatchq.begin();
+	while(rqi != dispatchq.end())
+	{
+		delete *rqi;
+		++rqi;
+	}
+	rqi = waitq.begin();
+	while(rqi != waitq.end())
+	{
+		delete *rqi;
+		++rqi;
+	}
+	RemoteDevPTable::iterator rdi = inquiry_cache.begin();
+	while(rdi != inquiry_cache.end())
+	{
+		delete rdi->second;
+		++rdi;
+	}
+}
+
 void LocalDevice::Private::init()
 {
 	hci_dbg_enter();
@@ -120,7 +142,7 @@ void LocalDevice::Private::init()
 	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)&ba) < 0 )
 		throw Exception();
 
-	delete notifier;
+	//delete notifier; //not needed, on_down frees it already
 	notifier = new FdNotifier();
 	notifier->fd( dd.handle() );
 	notifier->flags( POLLIN );
@@ -138,7 +160,7 @@ void LocalDevice::Private::init()
 
 	/* when the this device object is created
 	   we update the connections/remote tables
-	   with connections created before the daemon
+	   with connections existing before the daemon
 	   was launched
 	*/
 
@@ -260,12 +282,6 @@ void LocalDevice::Private::clear_cache()
 
 void LocalDevice::Private::post_req( Request* req )
 {
-	if(!notifier) //device not available at the moment
-	{
-		flush_queues();
-		return;
-	}
-
 	if(!req->hr.event) req->hr.event = EVT_CMD_COMPLETE;
 
 	req->type = HCI_COMMAND_PKT;
@@ -291,6 +307,16 @@ void LocalDevice::Private::post_req( Request* req )
 	dispatchq.push_front(req);
 	req->iter = dispatchq.begin();
 
+	if(!notifier) //device not available at the moment
+	{
+		/*	I used to do this BEFORE pushing the current
+			request into the queue, which resulted, of
+			course in having it time out
+		*/
+		flush_queues();
+		return;
+	}
+
 	notifier->flags( notifier->flags() | POLLOUT );
 }
 
@@ -313,16 +339,25 @@ void LocalDevice::Private::flush_queues()
 
 	/*	we're toast! cancel all pending I/O
 	*/
+	Requests::iterator d = dispatchq.begin();
+	while(d != dispatchq.end())
+	{
+		waitq.push_back(*d);
+		++d;
+	}
+	dispatchq.clear();
+
 	Requests::iterator i = waitq.begin();
-	waitq.merge(dispatchq);
+	//waitq.merge(dispatchq);
 	while(i != waitq.end())
 	{
 		Requests::iterator n = i;
 		++n;
-		if(n != waitq.end())
-		{
-			parent->on_after_event(EIO,(*i)->cookie);
-		}
+
+		parent->on_after_event(EIO,(*i)->cookie);
+		delete *i;
+		waitq.erase(i);
+
 		i = n;
 	}
 	hci_dbg_leave();
@@ -727,6 +762,16 @@ void LocalDevice::Private::host_ctl_cmd_complete( Request* req )
 			parent->on_get_voice_setting(r->status,req->cookie,r->voice_setting);
 			break;
 		}
+		case OCF_WRITE_AUTH_ENABLE:
+		{
+			parent->on_set_auth_enable(0,req->cookie);
+			break;
+		}
+		case OCF_WRITE_ENCRYPT_MODE:
+		{
+			parent->on_set_encrypt_mode(0,req->cookie);
+			break;
+		}
 		case OCF_WRITE_SCAN_ENABLE:
 		{
 			parent->on_set_scan_enable(0,req->cookie);
@@ -751,11 +796,10 @@ void LocalDevice::Private::info_param_cmd_complete( Request* req )
 		{
 			read_bd_addr_rp* r = (read_bd_addr_rp*) req->hr.rparam;
 
-			char local_addr[32] = {0};
+			char local_addr[18] = {0};
 			ba2str(&(r->bdaddr),local_addr);
-			char* local_addr_ptr = local_addr;
 
-			parent->on_get_address(r->status,req->cookie,local_addr_ptr);
+			parent->on_get_address(r->status,req->cookie,local_addr);
 			break;
 		}
 		case OCF_READ_LOCAL_VERSION:
@@ -1032,19 +1076,92 @@ int LocalDevice::get_stats
 
 	hci_dbg_leave();
 
-	return 1;
+	return 0;
+}
+
+int LocalDevice::get_link_mode( u32* lm )
+{
+	hci_dbg_enter();
+
+	Socket sock;
+
+	hci_dev_info di;
+	if(__hci_devinfo(sock.handle(),id(),&di) < 0)
+	{
+		hci_dbg_leave();
+		return -1;
+	}
+	if(lm)	*lm = di.link_mode;
+
+	hci_dbg_leave();
+
+	return 0;
+}
+
+int LocalDevice::set_link_mode( u32 lm )
+{
+	struct hci_dev_req dr;
+
+	dr.dev_id = id();
+	dr.dev_opt = lm;
+
+	if( ioctl(pvt->dd.handle(), HCISETLINKMODE, (ulong)&dr) < 0 )
+	{
+		return -1;
+	}
+	return 0;
+}
+
+int LocalDevice::get_link_policy( u32* lp )
+{
+	hci_dbg_enter();
+
+	Socket sock;
+
+	hci_dev_info di;
+	if(__hci_devinfo(sock.handle(),id(),&di) < 0)
+	{
+		hci_dbg_leave();
+		return -1;
+	}
+	if(lp)	*lp = di.link_policy;
+
+	hci_dbg_leave();
+
+	return 0;
+}
+
+int LocalDevice::set_link_policy( u32 lp )
+{
+	struct hci_dev_req dr;
+
+	dr.dev_id = id();
+	dr.dev_opt = lp;
+
+	if( ioctl(pvt->dd.handle(), HCISETLINKPOL, (ulong)&dr) < 0 )
+	{
+		return -1;
+	}
+	return 0;
 }
 
 void LocalDevice::set_auth_enable( u8 enable, void* cookie, int timeout )
 {
-/*	struct hci_dev_req dr;
+	u8* auth = new u8;
+	*auth = enable;
 
-	dr.dev_id = id();
-	dr.dev_opt = enable ? AUTH_ENABLED : AUTH_DISABLED;
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_WRITE_AUTH_ENABLE;
+	req->hr.cparam = auth;
+	req->hr.clen   = 1;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = 1;
 
-	if( ioctl(pvt->dd.handle(), HCISETAUTH, (ulong)&dr) < 0 )	
-		throw Exception();
-*/
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
 }
 void LocalDevice::get_auth_enable( void* cookie, int timeout )
 {
@@ -1070,14 +1187,21 @@ void LocalDevice::get_auth_enable( void* cookie, int timeout )
 
 void LocalDevice::set_encrypt_mode( u8 encrypt, void* cookie, int timeout )
 {
-/*	struct hci_dev_req dr;
+	u8* mode = new u8;
+	*mode = encrypt;
 
-	dr.dev_id = id();
-	dr.dev_opt = encrypt ? ENCRYPT_P2P : ENCRYPT_DISABLED;
+	Request* req = new Request;
+	req->hr.ogf    = OGF_HOST_CTL;
+	req->hr.ocf    = OCF_WRITE_ENCRYPT_MODE;
+	req->hr.cparam = mode;
+	req->hr.clen   = 1;
+	req->hr.rparam = NULL;
+	req->hr.rlen   = 1;
 
-	if( ioctl(pvt->dd.handle(), HCISETENCRYPT, (ulong)&dr) < 0 )
-		throw Exception();
-*/
+	req->to.interval(timeout);
+	req->cookie = cookie;
+
+	pvt->post_req(req);
 }
 void LocalDevice::get_encrypt_mode( void* cookie, int timeout )
 {
@@ -1328,6 +1452,23 @@ void LocalDevice::get_features( void* cookie, int timeout )
 
 void LocalDevice::get_address( void* cookie, int timeout )
 {
+	/*	sometimes we might want to read the address
+		even when the device is down, and the function
+		below does not work in this case, even if I know
+		that adding control flows isn't the best thing
+		the device address is an important property
+		and IMHO deserves an exception, so...
+	*/
+	if( pvt->dd.handle() < 0 )
+	{
+		char local_addr[18] = {0};
+		ba2str((bdaddr_t*)pvt->ba.ptr(),local_addr);
+
+		on_get_address(0,cookie,local_addr);
+		on_after_event(0,cookie);
+		return;
+	}
+
 	Request* req = new Request;
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_BD_ADDR;
