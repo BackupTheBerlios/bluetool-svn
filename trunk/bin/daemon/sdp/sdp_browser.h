@@ -1,9 +1,9 @@
 #ifndef __BTOOL_SDP_BROWSER_H
 #define __BTOOL_SDP_BROWSER_H
 
-#include "../../cbus/cbus.h"
-#include "../../libbluetool/sdpsession.h"
-#include "../../libbluetool/hcidevice.h"
+#include <cbus/cbus.h>
+#include <bluetool/sdpsession.h>
+#include <bluetool/hcidevice.h>
 
 class SdpBrowser : public DBus::LocalInterface
 {

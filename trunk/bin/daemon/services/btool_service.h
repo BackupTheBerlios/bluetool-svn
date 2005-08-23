@@ -3,8 +3,8 @@
 
 #include <string>
 
-#include "../../common/configfile.h"
-#include "../../cbus/cbus.h"
+#include <common/configfile.h>
+#include <cbus/cbus.h>
 #include "../btool_names.h"
 
 namespace Bluetool

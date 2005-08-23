@@ -1,7 +1,7 @@
 #ifndef __BLUE_DEBUG_H
 #define __BLUE_DEBUG_H
 
-#include "../common/debug.h"
+#include <common/debug.h>
 
 #ifdef _DEBUG
 #	define blue_dbg(format, ...){	fprintf(stderr, "blue|");		\

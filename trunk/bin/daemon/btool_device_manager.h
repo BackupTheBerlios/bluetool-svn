@@ -1,9 +1,9 @@
 #ifndef __BTOOL_HCI_SERVICE_H
 #define __BTOOL_HCI_SERVICE_H
 
-#include "../libbluetool/hcisocket.h"
-#include "../cbus/cbus.h"
-#include "../common/fdnotifier.h"
+#include <bluetool/hcisocket.h>
+#include <cbus/cbus.h>
+#include <common/fdnotifier.h>
 
 #include "btool_names.h"
 #include "btool_device.h"

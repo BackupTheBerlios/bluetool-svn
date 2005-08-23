@@ -5,9 +5,10 @@
 #include <string>
 #include <algorithm>
 
-#include "../../cbus/cbus.h"
-#include "../../libbluetool/hcidevice.h"
-#include "../../libbluetool/bdaddr.h"
+#include <bluetool/hcidevice.h>
+#include <bluetool/bdaddr.h>
+
+#include <cbus/cbus.h>
 
 #define	HCI_TIMEOUT 120000
 

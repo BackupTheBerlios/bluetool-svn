@@ -11,8 +11,8 @@ namespace Bluetool
 	class RemoteDevice;
 }
 
-#include "../libbluetool/bdaddr.h"
-#include "../cbus/cbus.h"
+#include <bluetool/bdaddr.h>
+#include <cbus/cbus.h>
 #include "hci/hci_device.h"
 #include "sdp/sdp_browser.h"
 #include "services/database/service_database.h"

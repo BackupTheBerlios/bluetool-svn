@@ -1,4 +1,4 @@
-include ../Makefile.inc
+include ../../Makefile.inc
 
 #
 #	Object file generation
@@ -8,9 +8,9 @@ CPPS = $(wildcard *.cpp \
 		  ./sdp/*.cpp \
 		  ./services/*.cpp \
 		  ./services/database/*.cpp \
-		  ../cbus/*.cpp \
-		  ../common/*.cpp \
-		  ../libbluetool/linux/*.cpp \
+		  ../../lib/cbus/*.cpp \
+		  ../../lib/common/*.cpp \
+		  ../../lib/bluetool/linux/*.cpp \
 	)
 
 OBJS = $(addsuffix .o, $(basename $(CPPS) ) )

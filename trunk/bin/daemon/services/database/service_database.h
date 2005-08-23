@@ -1,10 +1,10 @@
 #ifndef __BTOOL_SERVICEDB_H
 #define __BTOOL_SERVICEDB_H
 
+#include <cbus/cbus.h>
+#include <bluetool/bdaddr.h>
 #include "../btool_service_loader.h"
 #include "../../btool_names.h"
-#include "../../../cbus/cbus.h"
-#include "../../../libbluetool/bdaddr.h"
 
 namespace Bluetool
 {
