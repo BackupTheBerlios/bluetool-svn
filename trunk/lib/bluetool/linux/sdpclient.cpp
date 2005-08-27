@@ -128,6 +128,7 @@ void Client::Private::try_connect( Timeout& tick )
 
 			if( errno == EBUSY )
 			{
+				sdp_dbg_leave();
 				return;	//try later
 			}
 			else

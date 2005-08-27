@@ -195,6 +195,8 @@ MessageIter MessageIter::new_array( u8 type )
 	switch(type)
 	{
 		case DBUS_TYPE_STRING:	sig=DBUS_TYPE_STRING_AS_STRING;
+		break;
+		case DBUS_TYPE_UINT16:	sig=DBUS_TYPE_UINT16_AS_STRING;
 	 	break;
 		//todo: add more
 		default:		sig = NULL;
