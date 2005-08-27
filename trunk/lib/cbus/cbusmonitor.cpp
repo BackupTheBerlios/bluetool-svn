@@ -112,7 +112,7 @@ void Monitor::Private::add_watch( DBusWatch* w )
 //	if( wflags & DBUS_WATCH_WRITABLE )
 //		flags |= POLLOUT;
 
-	FdNotifier* fn = new FdNotifier( dbus_watch_get_fd(w), flags );
+	FdNotifier* fn = FdNotifier::create( dbus_watch_get_fd(w), flags );
 
 	fn->data(w);
 	fn->can_read.connect( sigc::mem_fun(*this, &Monitor::Private::fd_ready) );
@@ -128,7 +128,8 @@ void Monitor::Private::rem_watch( DBusWatch* w )
 	cbus_dbg("removing watch %p",w);
 
 	FdNotifier* fn = static_cast<FdNotifier*>(dbus_watch_get_data(w));
-	delete fn;
+
+	FdNotifier::destroy(fn);
 
 /*	FdNotifierPList::iterator i = _fdnotifiers.begin();
 	while( i != _fdnotifiers.end() )
@@ -146,7 +147,7 @@ void Monitor::Private::rem_watch( DBusWatch* w )
 
 void Monitor::Private::add_timeout( DBusTimeout* dt )
 {
-	Timeout *t = new Timeout;
+	Timeout *t = Timeout::create();
 
 	t->data(dt);
 	t->interval(dbus_timeout_get_interval(dt));
@@ -165,7 +166,8 @@ void Monitor::Private::rem_timeout( DBusTimeout* dt )
 
 	Timeout* t = static_cast<Timeout*>(dbus_timeout_get_data(dt));
 	t->update();
-	delete t;
+
+	Timeout::destroy(t);
 
 /*	TimeoutPList::iterator i = _timeouts.begin();
 	while( i != _timeouts.end() )

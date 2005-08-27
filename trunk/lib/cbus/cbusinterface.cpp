@@ -50,6 +50,12 @@ bool LocalInterface::invoke_method( const CallMessage& msg )
 	else	return false;
 }
 
+void LocalInterface::emit_signal( SignalMessage& sig )
+{
+	sig.interface( iname().c_str() );
+	remit_signal(sig);
+}
+
 RemoteInterface::RemoteInterface( const char* name )
 :	Interface(name)
 {}

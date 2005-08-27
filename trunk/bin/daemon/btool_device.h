@@ -2,21 +2,23 @@
 #define __BTOOL_DEVICE_H
 
 #include <map>
+#include <common/refptr.h>
+#include <bluetool/bdaddr.h>
+#include <cbus/cbus.h>
+
+#include "btool_names.h"
 
 namespace Bluetool
 {
 	class Device;
-	typedef std::map<int, Device*>	DevicePTable;
+	typedef std::map <int, RefPtr<Device> >	DeviceRTable;
 
 	class RemoteDevice;
 }
 
-#include <bluetool/bdaddr.h>
-#include <cbus/cbus.h>
 #include "hci/hci_device.h"
 #include "sdp/sdp_browser.h"
 #include "services/btool_service_database.h"
-#include "btool_names.h"
 
 namespace Bluetool
 {
@@ -28,11 +30,6 @@ public:
 	~Device();
 
 	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
-
-	/*	signals
-	*/
-	void DeviceInRange	( const RemoteDevice& );
-	void DeviceOutOfRange	( const RemoteDevice& );
 
 private:
 	ServiceDatabase	_services;

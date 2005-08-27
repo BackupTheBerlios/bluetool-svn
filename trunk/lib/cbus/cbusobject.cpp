@@ -13,6 +13,11 @@ Object::~Object()
 {
 }
 
+const Object* Object::object() const
+{
+	return this;
+}
+
 LocalObject::LocalObject( const char* name, Connection& conn )
 :	Object(name,conn)
 {
@@ -21,7 +26,7 @@ LocalObject::LocalObject( const char* name, Connection& conn )
 
 LocalObject::~LocalObject()
 {
-	if(noref()) unregister_obj();
+	if(one()) unregister_obj();
 }
 
 DBusObjectPathVTable LocalObject::_vtable =
@@ -88,6 +93,13 @@ DBusHandlerResult LocalObject::message_function_stub( DBusConnection*, DBusMessa
 		return o->handle_message(msg) ? DBUS_HANDLER_RESULT_HANDLED : DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 	}
 	else return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+void LocalObject::remit_signal( SignalMessage& sig )
+{
+	sig.path(oname().c_str());
+
+	conn().send(sig);
 }
 
 bool LocalObject::handle_message( const Message& msg )

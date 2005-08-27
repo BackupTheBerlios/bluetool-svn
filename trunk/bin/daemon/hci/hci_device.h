@@ -12,6 +12,9 @@
 
 #define	HCI_TIMEOUT 120000
 
+namespace Bluetool
+{
+
 class HciDevice;
 typedef std::map<int, HciDevice*>	HciDevicePTable;
 
@@ -216,6 +219,20 @@ private:
 		const char* name
 	);
 
+	void on_get_address
+	(	
+		u16 status,
+		void* cookie,
+		const char* addr
+	);
+
+	void on_get_class
+	(
+		u16 status,
+		void* cookie,
+		u8* dev_class
+	);
+
 	void on_get_version
 	(
 		u16 status,
@@ -283,5 +300,7 @@ private:
 private:
 	DBus::Connection	_bus;
 };
+
+}//namespace Bluetool
 
 #endif//__BTOOL_HCI_DEVICE_H

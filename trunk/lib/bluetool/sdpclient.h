@@ -1,15 +1,16 @@
-#ifndef __SDP_SESSION_H
-#define __SDP_SESSION_H
+#ifndef __SDP_CLIENT_H
+#define __SDP_CLIENT_H
 
 #include <common/types.h>
 #include <common/fdnotifier.h>
 #include <common/timeout.h>
 #include <common/bytevector.h>
 #include <common/unixsocket.h>
+#include <common/refptr.h>
 
 namespace Sdp
 {
-	class Session;
+	class Client;
 }
 
 #include "bdaddr.h"
@@ -20,14 +21,14 @@ namespace Sdp
 namespace Sdp
 {
 
-class Session
+class Client
 {
 public:
-	Session();
+	Client();
 
-	Session( const BdAddr& src, const BdAddr& dest );
+	Client( const BdAddr& src, const BdAddr& dest );
 
-	~Session();
+	~Client();
 
 	void start_service_search( DataElementSeq& service_pattern );
 
@@ -44,9 +45,9 @@ public:
 private:
 
 	struct Private;
-	Private* pvt;
+	RefPtr<Private> pvt;
 };
 
 }//namespace Sdp
 
-#endif//__SDP_SESSION_H
+#endif//__SDP_CLIENT_H

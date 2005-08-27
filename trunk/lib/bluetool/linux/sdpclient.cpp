@@ -8,26 +8,33 @@
 #include <bluetooth/sdp.h>
 #include <bluetooth/sdp_lib.h>
 
-#include "../sdpdebug.h"
-#include "../sdpsession.h"
 #include "sdprecord_p.h"
+#include "../sdpdebug.h"
+#include "../sdpclient.h"
 
 namespace Sdp
 {
 
-struct Session::Private
+static u16 __next_tid = 0;
+
+u16 __sdp_gen_tid()
+{
+	return ++__next_tid;
+}
+
+struct Client::Private
 {
 	BdAddr src;
 	BdAddr dst;
-	FdNotifier notifier;
-	Socket* sock;
+	FdNotifier* notifier;
+	RefPtr<Socket> sock;
 	bool local;
 
 	/* read buffer
 	*/
 	ByteVector ibuf;
 
-	ByteVector tbuf;	//for partial answers
+	//ByteVector tbuf;	//for partial answers
 	sdp_pdu_hdr_t* rsp;
 
 	RecordList records;
@@ -35,21 +42,23 @@ struct Session::Private
 	/* write buffer
 	*/
 	sdp_buf_t obuf;
+	sdp_buf_t sbuf;		//send buffer, contains obuf + continuation state
+
 	char obuf_array[1024];
 	int obytes;
 	sdp_pdu_hdr_t* req;
 
 	ByteVector cstate;
 
-	Session* sess;
+	Client* sess;
 	bool busy;
 
 	enum
 	{
-		IDLE,
-		SENDING,
-		WAITING,
-		RECEIVING,
+		IDLE,		//doing nothing
+		SENDING,	//sending a request
+		WAITING,	//waiting for a response
+		RECEIVING,	//reading a (partial)response
 		DISCONNECTED
 	} state;
 
@@ -58,83 +67,94 @@ struct Session::Private
 	void timed_out( Timeout& );
 
 	void start_send();
-	int save_and_cstate();
-	void ensure_connected();
+	int save_and_cstate( char* read_buf, int read_len );	//save partial response
+	void try_connect( Timeout& );
 	void response_complete();
 
-	Private( Session* s )
+	Private( Client* s )
+	:	notifier(NULL)
 	{
 		state = DISCONNECTED;
-		sock = NULL;
 		sess = s;
 
 		obuf.data = obuf_array;
 		obuf.buf_size = sizeof(obuf_array);
-
-		notifier.can_read.connect( sigc::mem_fun(this, &Private::can_read) );
-		notifier.can_write.connect( sigc::mem_fun(this, &Private::can_write) );
-	}
-
-	~Private()
-	{
-		delete sock;
 	}
 };
 
-void Session::Private::start_send()
+void Client::Private::start_send()
 {
+	sdp_dbg_enter();
+
 	/* init session state
 	*/
-	tbuf.clear();
 	ibuf.clear();
 	records.clear();
 
-	ensure_connected();
+	Timeout* t = Timeout::create(1000);
+	t->timed_out.connect( sigc::mem_fun(this, &Client::Private::try_connect) );
+	t->start();
+
+	sdp_dbg_leave();
 }
 
-void Session::Private::ensure_connected()
+void Client::Private::try_connect( Timeout& tick )
 {
+	sdp_dbg_enter();
+
 	if( state == SENDING || state == WAITING || state == RECEIVING )
 		return;
 
-	delete sock;
-
 	if( local )
 	{
-		UnixSocket* usock = new UnixSocket;
+		UnixSocket* usock = new UnixSocket();
 
 		if( !usock->connect(SDP_UNIX_PATH) )
 		{
-			delete usock;
 			throw Error();
 		}
 
-		sock = usock;
+		sock = RefPtr<Socket>(usock);
 	}
 	else
 	{
-		L2CapSocket* lsock = new L2CapSocket;
+		L2CapSocket* lsock = new L2CapSocket();
 
 		if( !lsock->bind(src)
-		    || !lsock->set_blocking(false)
-		    || !lsock->connect(dst,0/*TODO?:flags*/)
+		    || !lsock->connect(dst,0)
 		)
 		{
 			delete lsock;
-			throw Error();
+
+			if( errno == EBUSY )
+			{
+				return;	//try later
+			}
+			else
+			{
+				sess->on_response(errno,records);
+				goto acl_failed;
+			}
 		}
 
-		sock = lsock;
+		sock = RefPtr<Socket>(lsock);
 	}
-	notifier.fd(sock->handle());
-	notifier.flags( POLLOUT );
+	notifier = FdNotifier::create( sock->handle(), POLLOUT );
+
+	notifier->can_read.connect( sigc::mem_fun(this, &Private::can_read) );
+	notifier->can_write.connect( sigc::mem_fun(this, &Private::can_write) );
 
 	state = IDLE;
+
+acl_failed:
+
+	Timeout::destroy(&tick);
+	sdp_dbg_leave();
 }
 
-int Session::Private::save_and_cstate()
+int Client::Private::save_and_cstate( char* read_buf, int read_len )
 {
-	u8* tdata = &tbuf[0] + sizeof(sdp_pdu_hdr_t);
+	char* tdata = read_buf + sizeof(sdp_pdu_hdr_t);
 	u16 param_len;
 
 	switch( rsp->pdu_id )
@@ -169,7 +189,7 @@ int Session::Private::save_and_cstate()
 	}
 	/* copy buffered data
 	*/
-	if( tdata + param_len > &(tbuf[0])+tbuf.size() )
+	if( tdata + param_len > read_buf + read_len )
 	{
 		throw Error("pdu too large");
 	}
@@ -181,15 +201,17 @@ int Session::Private::save_and_cstate()
 	u8 cstate_len = *tdata;
 
 	if(cstate_len)
-		cstate.assign(tdata, tdata+cstate_len);
-
-	tbuf.clear();
+		cstate.assign(tdata, tdata+cstate_len+1);
+	else
+		cstate.clear();
 
 	return cstate_len;
 }
 
-void Session::Private::response_complete()
+void Client::Private::response_complete()
 {
+	sdp_dbg_enter();
+
 	u8* pdata = &(ibuf[0]);
 
 	switch( rsp->pdu_id )
@@ -200,7 +222,7 @@ void Session::Private::response_complete()
 			{
 				u32 handle = ntohl(*(u32*)pdata);
 
-				Record::Private* p = new Record::Private;
+				Record::Private* p = new Record::Private();
 				p->alloc = true;
 				p->rec = sdp_record_alloc();
 				p->rec->handle = handle;
@@ -214,33 +236,45 @@ void Session::Private::response_complete()
 		case SDP_SVC_ATTR_RSP:
 		case SDP_SVC_SEARCH_ATTR_RSP:
 		{
-			size_t seqlen = 0;
+			int seqlen = 0;
 
+			u8 dtd;
+			uint xtracted = sdp_extract_seqtype((char*)pdata, &dtd, &seqlen);
+
+			if( xtracted <= 0 ) break;
+
+			pdata += xtracted;
 			do
 			{
-				int len;
+				int bread = 0;
 
-				Record::Private* p = new Record::Private;
+				Record::Private* p = new Record::Private();
 				p->alloc = true;
-				p->rec = sdp_extract_pdu((char*)pdata,&len);
+				p->rec = sdp_extract_pdu((char*)pdata,&bread);
 
-				if(!p->rec) throw Error("invalid pdu in answer");
+				if(!p->rec) throw Error("invalid pdu in answer"); //mhh, this leaks
 
 				records.push_back(Record(p));
 
-				seqlen += len;
-				pdata += len;
+				xtracted += bread;
+				pdata += bread;
 			}
-			while( seqlen < ibuf.size() );
+			while( xtracted < ibuf.size() );
 
 			break;
 		}
 	}
 	sess->on_response(0,records);
+
+	sdp_dbg_leave();
 }
 
-void Session::Private::can_read( FdNotifier& )
+void Client::Private::can_read( FdNotifier& )
 {
+	char rbuf[SDP_RSP_BUFFER_SIZE];
+			
+	sdp_dbg_enter();
+
 	switch( state )
 	{
 		case WAITING:
@@ -249,23 +283,18 @@ void Session::Private::can_read( FdNotifier& )
 		}
 		case RECEIVING:
 		{
-			u8 sf[256];
-			int len = sock->recv((char*)sf, sizeof(sf));
-			if( len < 0 )
-			{	
-				if( errno != EAGAIN && errno != EINTR )
-				{
-					state = DISCONNECTED;
-					goto r_disconn;
-				}
+			int len = sock->recv(rbuf, sizeof(rbuf));
+
+			if( len <= 0 )
+			{
+				state = DISCONNECTED;
+				goto r_disconn;
 			}
 			else
 			{
-				tbuf.insert(tbuf.end(), sf, sf+len);
-
-				if( tbuf.size() >= sizeof(sdp_pdu_hdr_t) )
+				if( (uint)len >= sizeof(sdp_pdu_hdr_t) )
 				{
-					rsp = (sdp_pdu_hdr_t*)&tbuf[0];
+					rsp = (sdp_pdu_hdr_t*)rbuf;
 
 					if(rsp->pdu_id == SDP_ERROR_RSP)
 						goto sdp_error;
@@ -275,17 +304,19 @@ void Session::Private::can_read( FdNotifier& )
 
 					rsp->plen = ntohs(rsp->plen);
 					
-					if( tbuf.size() >= rsp->plen + sizeof(sdp_pdu_hdr_t) )
+					if( (uint)len >= rsp->plen + sizeof(sdp_pdu_hdr_t) )
 					{
 						/* find continuation state, if any
 						*/
-						if(save_and_cstate())
+						if(save_and_cstate(rbuf,len))
 						{
-							notifier.flags( POLLOUT );
+							notifier->flags( POLLOUT );
+
+							state = SENDING;
 						}
 						else
 						{
-							notifier.flags( 0 );
+							notifier->flags( 0 );
 
 							/* send results back
 							*/
@@ -294,28 +325,33 @@ void Session::Private::can_read( FdNotifier& )
 							state = IDLE;
 						}
 					}
-					
 				}
 			}
 			break;
 		}
 r_disconn:	case DISCONNECTED:
 		{
+			sess->on_response(ECONNABORTED, records);
 			break;
 		}
 		default:
 			break;
 	};
+	sdp_dbg_leave();
 	return;
 
 sdp_error:
 
-	u16 error = ntohs(*(u16*)(&tbuf[0]+sizeof(sdp_pdu_hdr_t)));
+	u16 error = ntohs(*(u16*)(rbuf+sizeof(sdp_pdu_hdr_t)));
 	sess->on_response(error, records);
+
+	sdp_dbg_leave();
 }
 
-void Session::Private::can_write( FdNotifier& )
+void Client::Private::can_write( FdNotifier& )
 {
+	sdp_dbg_enter();
+
 	switch( state )
 	{
 		case IDLE:
@@ -327,35 +363,36 @@ void Session::Private::can_write( FdNotifier& )
 		{
 			if(obytes == 0) //first time
 			{
-				/* append arguments
-				*/
-				if(!cstate.empty())
+				memcpy(&sbuf,&obuf,sizeof(obuf));
+
+				if(cstate.empty())
 				{
-					/* parse arglist
+					/* send null continuation state
 					*/
-					switch( req->pdu_id )
-					{
-					}
+					sbuf.data[sbuf.data_size] = '\0';
+					sbuf.data_size += 1;
 				}
 				else
 				{
 					/* send previous continuation state
 					*/
-					//obuf.insert(obuf.end(),cstate.begin(),cstate.end());
+					memcpy(sbuf.data+sbuf.data_size, &cstate[0], cstate.size());
+					sbuf.data_size += cstate.size();
 				}
 
 				/* calc req size & set headers
 				*/
-				req->tid = htons(13);//__sdp_new_tid(); TODO
-				req->plen = htons(obuf.data_size - sizeof(sdp_pdu_hdr_t));
+				req->tid = htons(__sdp_gen_tid());
+				req->plen = htons(sbuf.data_size - sizeof(sdp_pdu_hdr_t));
 			}
 
-			int len = sock->send(obuf.data+obytes, obuf.data_size - obytes);
+			int len = sock->send(sbuf.data+obytes, sbuf.data_size - obytes);
 			if( len < 0 )
 			{
 				if( errno != EAGAIN && errno != EINTR )
 				{
 					state = DISCONNECTED;
+					sdp_dbg("disconnected: %s", strerror(errno));
 					goto w_disconn;
 				}
 			}
@@ -365,7 +402,9 @@ void Session::Private::can_write( FdNotifier& )
 				if( obytes >= obuf.data_size )
 				{
 					state = WAITING;
-					notifier.flags( POLLIN );
+
+					notifier->flags( POLLIN );
+					obytes = 0;
 				}
 			}
 		break;
@@ -377,30 +416,36 @@ w_disconn:	case DISCONNECTED:
 		default:
 			break;
 	};
+	sdp_dbg_leave();
 }
 
-Session::Session()
+Client::Client()
+:	pvt( new Private(this) )
 {
-	pvt = new Private(this);
 	pvt->local = true;
 }
 
-Session::Session( const BdAddr& src, const BdAddr& dest )
+Client::Client( const BdAddr& src, const BdAddr& dest )
+:	pvt( new Private(this) )
 {
-	pvt = new Private(this);
 	pvt->src = src;
 	pvt->dst = dest;
 	pvt->local = false;
 }
 
-Session::~Session()
+Client::~Client()
 {
-	delete pvt;
+sdp_dbg("end of session");
 }
 
-void Session::start_service_search( DataElementSeq& service_pattern )
+void Client::start_service_search( DataElementSeq& service_pattern )
 {
-	if( pvt->state != Session::Private::IDLE )
+	sdp_dbg_enter();
+
+	if(
+		pvt->state != Client::Private::IDLE &&
+		pvt->state != Client::Private::DISCONNECTED
+	)
 		throw Error(EAGAIN);
 
 	/* start writing header
@@ -414,11 +459,22 @@ void Session::start_service_search( DataElementSeq& service_pattern )
 	/* start request
 	*/
 	pvt->start_send();
+
+	sdp_dbg_leave();
 }
 
-void Session::start_attribute_search( u32 service_handle, DataElementSeq& attributes )
+void Client::start_attribute_search( u32 service_handle, DataElementSeq& attributes )
 {
-	sdp_data_t* attr_list = DataElement::Private::new_seq(attributes);
+	sdp_dbg_enter();
+
+	if(
+		pvt->state != Client::Private::IDLE &&
+		pvt->state != Client::Private::DISCONNECTED
+	)
+		throw Error(EAGAIN);
+
+	//sdp_data_t* attr_list = DataElement::Private::new_seq(attributes);
+	sdp_data_t* attr_list = attributes.pvt->elem;
 
 	sdp_buf_t* pbuf = &(pvt->obuf);
 
@@ -439,26 +495,31 @@ void Session::start_attribute_search( u32 service_handle, DataElementSeq& attrib
 	*/
 	sdp_gen_pdu(pbuf,attr_list);
 
-	/* null continuation state
-	*/
-	*(u8*)(pbuf->data + pbuf->data_size) = 0;
-	pbuf->data_size += sizeof(u8);
-
 	pvt->req = (sdp_pdu_hdr_t*)pbuf->data;
 	pvt->req->pdu_id = SDP_SVC_ATTR_REQ;
 
 	pvt->start_send();
 
-	free(attr_list);
+	//free(attr_list);
+
+	sdp_dbg_leave();
 }
 
-void Session::start_attr_serv_search( DataElementSeq& service_pattern, DataElementSeq& attributes )
+void Client::start_attr_serv_search( DataElementSeq& service_pattern, DataElementSeq& attributes )
 {
-	if( pvt->state != Session::Private::IDLE )
+	sdp_dbg_enter();
+
+	if(
+		pvt->state != Client::Private::IDLE &&
+		pvt->state != Client::Private::DISCONNECTED
+	)
 		throw Error(EAGAIN);
 
-	sdp_data_t* svc_list = DataElement::Private::new_seq(service_pattern);
-	sdp_data_t* attr_list = DataElement::Private::new_seq(attributes);
+//	sdp_data_t* svc_list = DataElement::Private::new_seq(service_pattern);
+//	sdp_data_t* attr_list = DataElement::Private::new_seq(attributes);
+
+	sdp_data_t* svc_list = service_pattern.pvt->elem;
+	sdp_data_t* attr_list = attributes.pvt->elem;
 
 	sdp_buf_t* pbuf = &(pvt->obuf);
 
@@ -478,23 +539,20 @@ void Session::start_attr_serv_search( DataElementSeq& service_pattern, DataEleme
 	*/
 	sdp_gen_pdu(pbuf,attr_list);
 
-	/* null continuation state
-	*/
-	*(u8*)(pbuf->data + pbuf->data_size) = 0;
-	pbuf->data_size += sizeof(u8);
-
 	pvt->req = (sdp_pdu_hdr_t*)pbuf->data;
 	pvt->req->pdu_id = SDP_SVC_SEARCH_ATTR_REQ;
 
 	pvt->start_send();
 
-	free(svc_list);
-	free(attr_list);
+//	free(svc_list);
+//	free(attr_list);
+
+	sdp_dbg_leave();
 }
 
 /*	search for ALL attributes in ALL services
 */
-void Session::start_complete_search()
+void Client::start_complete_search()
 {
 	u16 public_group = PUBLIC_BROWSE_GROUP;
 

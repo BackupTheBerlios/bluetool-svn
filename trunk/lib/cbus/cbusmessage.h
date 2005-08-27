@@ -55,6 +55,10 @@ public:
 
 	inline u8   get_byte();
 
+	inline bool append_uint16( u16 u );
+
+	inline u16 get_uint16();
+
 	inline bool append_uint32( u32 u );
 
 	inline u32 get_uint32();
@@ -62,6 +66,10 @@ public:
 	inline MessageIter recurse();
 
 	inline MessageIter new_array( u8 type );
+
+	inline MessageIter new_array( const char* sig );
+
+	inline MessageIter new_struct( const char* sig );
 
 	inline void close_container( MessageIter& container );
 
@@ -143,6 +151,21 @@ u8 MessageIter::get_byte()
  	return ret;
 }
 
+bool MessageIter::append_uint16( u16 u )
+{
+	return dbus_message_iter_append_basic(&_iter, DBUS_TYPE_UINT16, &u);
+}
+
+u16 MessageIter::get_uint16()
+{	
+	if(type() != DBUS_TYPE_UINT16)
+		throw Error(DBUS_ERROR_INVALID_ARGS,"16-bit unsigned integer value expected");
+
+ 	u32 ret;
+	dbus_message_iter_get_basic(&_iter, &ret);
+ 	return ret;
+}
+
 bool MessageIter::append_uint32( u32 u )
 {
 	return dbus_message_iter_append_basic(&_iter, DBUS_TYPE_UINT32, &u);
@@ -167,7 +190,6 @@ MessageIter MessageIter::recurse()
 
 MessageIter MessageIter::new_array( u8 type )
 {
-	MessageIter arr;
 	char* sig;
 
 	switch(type)
@@ -178,7 +200,20 @@ MessageIter MessageIter::new_array( u8 type )
 		default:		sig = NULL;
 		break;
 	}
+	return new_array(sig);
+}
+
+MessageIter MessageIter::new_array( const char* sig )
+{
+	MessageIter arr;
 	dbus_message_iter_open_container(&_iter, DBUS_TYPE_ARRAY, sig, &arr._iter);
+	return arr;
+}
+
+MessageIter MessageIter::new_struct( const char* sig )
+{
+	MessageIter arr;
+	dbus_message_iter_open_container(&_iter, DBUS_TYPE_STRUCT, sig, &arr._iter);
 	return arr;
 }
 
@@ -350,6 +385,8 @@ bool ErrorMessage::name( const char* n )
 class SignalMessage : public Message
 {
 public:
+	SignalMessage( const char* name );
+
 	SignalMessage( const char* path, const char* interface, const char* name );
 
 	inline const char* interface() const;

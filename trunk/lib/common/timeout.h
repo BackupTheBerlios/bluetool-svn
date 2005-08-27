@@ -3,19 +3,25 @@
 
 #include <list>
 #include <sigc++/sigc++.h>
-#include "refcnt.h"
+#include "refptr.h"
 
 class Timeout;
 
 typedef sigc::signal<void, Timeout&> TimedOut;
 
-class Timeout : public RefCnt
+class Timeout
 {
 public:
-	Timeout( int interval = 0 );
+	static Timeout* create( int interval = 0 );
+
+	static void destroy( Timeout* t );
 
 	~Timeout();
 
+private:
+	Timeout( int interval );
+
+public:
 //	const Timeout& operator = ( const Timeout& );
 
 	int interval() const;
@@ -31,16 +37,16 @@ public:
 	void stop();
 	bool on();
 
-	void update();
+	bool update();
 
 	TimedOut timed_out;
 
 private:
 	struct Private;
-	Private* pvt;
+	RefPtr<Private> pvt;
 };
 
 typedef std::list<Timeout> TimeoutList;
-typedef std::list<Timeout*> TimeoutPList;
+typedef std::list< RefPtr<Timeout> > TimeoutRList;
 
 #endif//__CBUS_TIMEOUT_H

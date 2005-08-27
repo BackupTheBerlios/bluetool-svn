@@ -34,8 +34,10 @@ void LocalDevice::up()
 {
 	hci_dbg_enter();
 
+	ulong i = id();
+
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVUP, id()) < 0 && errno != EALREADY )
+	if( ioctl(sock.handle(), HCIDEVUP, i) < 0 && errno != EALREADY )
 		throw Exception();
 
 	hci_dbg_leave();
@@ -66,8 +68,10 @@ void LocalDevice::down()
 {
 	hci_dbg_enter();
 
+	ulong i = id();
+
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVDOWN, id()) < 0 )
+	if( ioctl(sock.handle(), HCIDEVDOWN, i) < 0 )
 		throw Exception();
 
 	hci_dbg_leave();
@@ -77,9 +81,10 @@ void LocalDevice::on_down()
 {
 	hci_dbg_enter();
 
-	pvt->dd.close();
-	delete pvt->notifier;
+	FdNotifier::destroy(pvt->notifier);
 	pvt->notifier = NULL;
+
+	pvt->dd.close();
 
 	pvt->flush_queues();
 
@@ -97,6 +102,8 @@ void LocalDevice::reset()
 
 Request::Request()
 {
+	to = Timeout::create();
+
 	memset(&hr, 0, sizeof(hr));
 	memset(iobuf, 0, sizeof(iobuf));
 	memset(&ch, 0, sizeof(ch));
@@ -108,14 +115,23 @@ Request::~Request()
 	*/
 	if(hr.cparam) delete[] (u8*)hr.cparam;
 	if(hr.rparam) delete[] (u8*)hr.rparam;
+
+	Timeout::destroy(to);
 }
 
 /*
 */
 
+LocalDevice::Private::Private( LocalDevice* p, int i )
+:	notifier(NULL)
+{
+	parent = p;
+	id = i;
+}
+
 LocalDevice::Private::~Private()
 {
-	Requests::iterator rqi = dispatchq.begin();
+/*	Requests::iterator rqi = dispatchq.begin();
 	while(rqi != dispatchq.end())
 	{
 		delete *rqi;
@@ -127,12 +143,15 @@ LocalDevice::Private::~Private()
 		delete *rqi;
 		++rqi;
 	}
+*/
 	RemoteDevPTable::iterator rdi = inquiry_cache.begin();
 	while(rdi != inquiry_cache.end())
 	{
 		delete rdi->second;
 		++rdi;
 	}
+
+	FdNotifier::destroy(notifier);
 }
 
 void LocalDevice::Private::init()
@@ -143,9 +162,7 @@ void LocalDevice::Private::init()
 		throw Exception();
 
 	//delete notifier; //not needed, on_down frees it already
-	notifier = new FdNotifier();
-	notifier->fd( dd.handle() );
-	notifier->flags( POLLIN );
+	notifier = FdNotifier::create(dd.handle(), POLLIN);
 	notifier->can_read.connect(sigc::mem_fun( this, &LocalDevice::Private::read_ready ));
 	notifier->can_write.connect(sigc::mem_fun( this, &LocalDevice::Private::write_ready ));
 
@@ -153,6 +170,7 @@ void LocalDevice::Private::init()
 	f.set_type(HCI_EVENT_PKT);
 	f.set_event(EVT_CMD_STATUS);
 	f.set_event(EVT_CMD_COMPLETE);
+	f.set_event(EVT_INQUIRY_RESULT);
 	f.clear_opcode();
 
 	if(!dd.set_filter(f))
@@ -257,12 +275,19 @@ void LocalDevice::Private::finalize_cache()
 	RemoteDevPTable::iterator ri = inquiry_cache.begin();
 	while( ri != inquiry_cache.end() )
 	{
-		if(ri->second->last_updated() < time_last_inquiry)
+		if( TVLESS(ri->second->last_updated(), time_last_inquiry) )
 		{
 			delete ri->second;
+
+			RemoteDevPTable::iterator tmp = ri;
+			tmp++;
 			inquiry_cache.erase(ri);
+			ri = tmp;
 		}
-		++ri;
+		else
+		{
+			++ri;
+		}
 	}
 }
 
@@ -280,7 +305,7 @@ void LocalDevice::Private::clear_cache()
 	}
 }
 
-void LocalDevice::Private::post_req( Request* req )
+void LocalDevice::Private::post_req( RefPtr<Request>& req )
 {
 	if(!req->hr.event) req->hr.event = EVT_CMD_COMPLETE;
 
@@ -299,13 +324,13 @@ void LocalDevice::Private::post_req( Request* req )
 	}
 	else req->ion = 2;
 
-	req->to.data( req );
-	req->to.timed_out.connect( sigc::mem_fun( this, &Private::req_timedout ));
-	req->to.start();
-
-	req->status = Request::QUEUED;
 	dispatchq.push_front(req);
 	req->iter = dispatchq.begin();
+
+	req->status = Request::QUEUED;
+	req->to->data( &req->iter );
+	req->to->timed_out.connect( sigc::mem_fun( this, &Private::req_timedout ));
+	req->to->start();
 
 	if(!notifier) //device not available at the moment
 	{
@@ -324,9 +349,12 @@ void LocalDevice::Private::req_timedout( Timeout& t )
 {
 	hci_dbg_enter();
 
-	Request* r = static_cast<Request*>(t.data());
+	RefPtr<Request>& r =
+		*(*( static_cast<std::list< RefPtr<Request> >::iterator*>(t.data()) ));
+	// unreadable, but works
+
 	r->status = Request::TIMEDOUT;
-	r->to.stop();
+	r->to->stop();
 	fire_event(r); //todo: fails if timeout occurs in dispatch queue
 
 	hci_dbg_leave();
@@ -348,14 +376,13 @@ void LocalDevice::Private::flush_queues()
 	dispatchq.clear();
 
 	Requests::iterator i = waitq.begin();
-	//waitq.merge(dispatchq);
+
 	while(i != waitq.end())
 	{
 		Requests::iterator n = i;
 		++n;
 
 		parent->on_after_event(EIO,(*i)->cookie);
-		delete *i;
 		waitq.erase(i);
 
 		i = n;
@@ -372,12 +399,23 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	u8 buf[HCI_MAX_EVENT_SIZE];
 	int len;
 
-	if(fn.state() & POLLERR || fn.state() & POLLHUP)
+	if(fn.state() & POLLERR || fn.state() & POLLHUP )
 	{
 		flush_queues();
-		throw Exception();
+		//throw Exception();
+		hci_dbg_leave();
+		return;
 	}
-	hci_dbg("fn.state() = %d",fn.state());
+	if(fn.flags() & POLLOUT)
+	{
+		/* that's NONSENSE but sometimes it BLOCKS if
+		   we let him reach the read()
+		*/
+
+		hci_dbg("fn.flags() = %d",fn.flags());
+		hci_dbg_leave();
+		return;
+	}
 
 	while( (len = read(fn.fd(), buf, sizeof(buf))) < 0 )
 	{
@@ -411,16 +449,27 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	len -= (1 + HCI_EVENT_HDR_SIZE);
 
 	Requests::reverse_iterator ri = waitq.rbegin();
-	Request* pr;
+	
+	RefPtr<Request>pr;
+
 	while( ri != waitq.rend() )
 	{
-		pr = (*ri);
+		pr = *ri;
 		if( pr->status == Request::WAITING )
 		{
 			switch (hp->eh.evt) {
 
 			case EVT_CMD_STATUS:
 			{
+				/* we shouldn't deal with particular events here, but
+				   there are some exceptions :(
+				*/
+				if( hp->evt.cs.opcode == cmd_opcode_pack(OGF_LINK_CTL,OCF_INQUIRY) 
+					&& !hp->evt.cs.status )
+				{
+					gettimeofday(&time_last_inquiry, NULL);
+				}
+
 				if (hp->evt.cs.opcode != pr->ch.opcode)
 					break;
 
@@ -448,6 +497,27 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 				memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
 				goto _fire;
 			}
+			/* special events which are caught even if there's no
+			   associated request 
+			*/
+			case EVT_INQUIRY_RESULT:
+			{
+				u8* nrsp = (u8*)&(hp->evt.ptr);
+				inquiry_info* ii = (inquiry_info*)(nrsp+1);
+
+				hci_event_inquiry_result(*nrsp, ii);
+				break;
+			}
+			case EVT_CONN_COMPLETE:
+			{
+				hci_event_conn_complete((evt_conn_complete*)&(hp->evt.ptr));
+				break;
+			}
+			case EVT_DISCONN_COMPLETE:
+			{
+				hci_event_disconn_complete((evt_disconn_complete*)&(hp->evt.ptr));
+				break;
+			}
 			default:
 			{
 				if (hp->eh.evt != pr->hr.event)
@@ -463,6 +533,7 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 		}
 		++ri;
 	}
+	hci_dbg_leave();
 	return;
 _fire:	pr->status = Request::COMPLETE;
 	fire_event(pr);
@@ -490,10 +561,10 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 	dd.get_filter(of);
 
 	Requests::reverse_iterator ri = dispatchq.rbegin();
-	Request* pr;
+	RefPtr<Request> pr;
 	while( ri != dispatchq.rend() )
 	{
-		pr = (*ri);
+		pr = *ri;
 		switch( pr->status )
 		{
 			case Request::WRITING:
@@ -521,8 +592,8 @@ void LocalDevice::Private::write_ready( FdNotifier& fn )
 			case Request::TIMEDOUT:
 			{	//move! timeouts are supposed to be in the other queue
 				pr->status = Request::WAITING;
-				dispatchq.erase( pr->iter );
 				waitq.push_front(pr);
+				dispatchq.erase( pr->iter );
 				pr->iter = waitq.begin();
 
 				fire_event(pr);
@@ -556,7 +627,8 @@ _writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 		else
 		{
 			flush_queues();
-			throw Exception();
+			//throw Exception();
+			return;
 		}
 	}
 	else
@@ -570,7 +642,7 @@ _writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::fire_event( Request* req )
+void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 {
 	hci_dbg_enter();
 
@@ -594,27 +666,27 @@ void LocalDevice::Private::fire_event( Request* req )
 			{
 				case OGF_LINK_CTL:
 				{
-					link_ctl_cmd_complete(req);
+					link_ctl_cmd_complete(*req);
 					break;
 				}
 				case OGF_LINK_POLICY:
 				{
-					link_policy_cmd_complete(req);
+					link_policy_cmd_complete(*req);
 					break;
 				}
 				case OGF_HOST_CTL:
 				{
-					host_ctl_cmd_complete(req);
+					host_ctl_cmd_complete(*req);
 					break;
 				}
 				case OGF_INFO_PARAM:
 				{
-					info_param_cmd_complete(req);
+					info_param_cmd_complete(*req);
 					break;
 				}
 				case OGF_STATUS_PARAM:
 				{
-					status_param_cmd_complete(req);
+					status_param_cmd_complete(*req);
 					break;
 				}
 			};						
@@ -623,8 +695,10 @@ void LocalDevice::Private::fire_event( Request* req )
 		case EVT_CMD_STATUS:
 		{
 			evt_cmd_status* cs = (evt_cmd_status*) req->hr.rparam;
-			if(!cs->status)	//no problems
+			if(!cs->status)
+			{
 				goto nodel;
+			}
 
 			error = bt_error(cs->status);
 
@@ -636,7 +710,7 @@ void LocalDevice::Private::fire_event( Request* req )
 		*/
 		default:
 		{
-			hci_event_received(req);
+			hci_event_received(*req);
 		}
 	}
 
@@ -668,17 +742,16 @@ void LocalDevice::Private::fire_event( Request* req )
 */
 	parent->on_after_event(error,req->cookie);
 	waitq.erase( req->iter );
-	delete req;
 
 nodel:	hci_dbg_leave();
 	return;
 }
 
-void LocalDevice::Private::link_ctl_cmd_complete( Request* req )
+void LocalDevice::Private::link_ctl_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
-	switch( req->hr.ocf )
+	switch( req.hr.ocf )
 	{
 		case OCF_INQUIRY_CANCEL:
 		{
@@ -692,17 +765,17 @@ void LocalDevice::Private::link_ctl_cmd_complete( Request* req )
 					fire_event(*ri);
 				++ri;
 			}
-			parent->on_inquiry_cancel(0,req->cookie);
+			parent->on_inquiry_cancel(0,req.cookie);
 			break;
 		}
 		case OCF_PERIODIC_INQUIRY:
 		{
-			parent->on_periodic_inquiry_started(0,req->cookie);
+			parent->on_periodic_inquiry_started(0,req.cookie);
 			break;
 		}
 		case OCF_EXIT_PERIODIC_INQUIRY:
 		{
-			parent->on_periodic_inquiry_cancel(0,req->cookie);
+			parent->on_periodic_inquiry_cancel(0,req.cookie);
 			break;
 		}
 	}
@@ -710,101 +783,101 @@ void LocalDevice::Private::link_ctl_cmd_complete( Request* req )
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::link_policy_cmd_complete( Request* req )
+void LocalDevice::Private::link_policy_cmd_complete( Request& req )
 {
 }
 
-void LocalDevice::Private::host_ctl_cmd_complete( Request* req )
+void LocalDevice::Private::host_ctl_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
-	switch( req->hr.ocf )
+	switch( req.hr.ocf )
 	{
 		case OCF_READ_AUTH_ENABLE:
 		{
-			u8* enable = (u8*) req->hr.rparam;
+			u8* enable = (u8*) req.hr.rparam;
 
-			parent->on_get_auth_enable(0, req->cookie, *enable);
+			parent->on_get_auth_enable(0, req.cookie, *enable);
 			break;
 		}
 		case OCF_READ_ENCRYPT_MODE:
 		{
-			u8* mode = (u8*) req->hr.rparam;
+			u8* mode = (u8*) req.hr.rparam;
 
-			parent->on_get_encrypt_mode(0, req->cookie, *mode);
+			parent->on_get_encrypt_mode(0, req.cookie, *mode);
 			break;
 		}
 		case OCF_READ_SCAN_ENABLE:
 		{
-			read_scan_enable_rp* r = (read_scan_enable_rp*) req->hr.rparam;
+			read_scan_enable_rp* r = (read_scan_enable_rp*) req.hr.rparam;
 
-			parent->on_get_scan_enable(r->status,req->cookie,r->enable);
+			parent->on_get_scan_enable(r->status,req.cookie,r->enable);
 			break;
 		}
 		case OCF_READ_LOCAL_NAME:
 		{
-			read_local_name_rp* r = (read_local_name_rp*) req->hr.rparam;
+			read_local_name_rp* r = (read_local_name_rp*) req.hr.rparam;
 
-			parent->on_get_name(r->status,req->cookie,(char*)r->name);
+			parent->on_get_name(r->status,req.cookie,(char*)r->name);
 			break;
 		}
 		case OCF_READ_CLASS_OF_DEV:
 		{
-			read_class_of_dev_rp* r = (read_class_of_dev_rp*) req->hr.rparam;
+			read_class_of_dev_rp* r = (read_class_of_dev_rp*) req.hr.rparam;
 
-			parent->on_get_class(r->status,req->cookie,r->dev_class);
+			parent->on_get_class(r->status,req.cookie,r->dev_class);
 			break;
 		}
 		case OCF_READ_VOICE_SETTING:
 		{
-			read_voice_setting_rp* r = (read_voice_setting_rp*) req->hr.rparam;
+			read_voice_setting_rp* r = (read_voice_setting_rp*) req.hr.rparam;
 
-			parent->on_get_voice_setting(r->status,req->cookie,r->voice_setting);
+			parent->on_get_voice_setting(r->status,req.cookie,r->voice_setting);
 			break;
 		}
 		case OCF_WRITE_AUTH_ENABLE:
 		{
-			parent->on_set_auth_enable(0,req->cookie);
+			parent->on_set_auth_enable(0,req.cookie);
 			break;
 		}
 		case OCF_WRITE_ENCRYPT_MODE:
 		{
-			parent->on_set_encrypt_mode(0,req->cookie);
+			parent->on_set_encrypt_mode(0,req.cookie);
 			break;
 		}
 		case OCF_WRITE_SCAN_ENABLE:
 		{
-			parent->on_set_scan_enable(0,req->cookie);
+			parent->on_set_scan_enable(0,req.cookie);
 			break;
 		}
 		case OCF_CHANGE_LOCAL_NAME:
 		{
-			parent->on_set_name(0,req->cookie);
+			parent->on_set_name(0,req.cookie);
 			break;
 		}
 	}
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::info_param_cmd_complete( Request* req )
+void LocalDevice::Private::info_param_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
-	switch( req->hr.ocf )
+	switch( req.hr.ocf )
 	{
 		case OCF_READ_BD_ADDR:
 		{
-			read_bd_addr_rp* r = (read_bd_addr_rp*) req->hr.rparam;
+			read_bd_addr_rp* r = (read_bd_addr_rp*) req.hr.rparam;
 
 			char local_addr[18] = {0};
 			ba2str(&(r->bdaddr),local_addr);
 
-			parent->on_get_address(r->status,req->cookie,local_addr);
+			parent->on_get_address(r->status,req.cookie,local_addr);
 			break;
 		}
 		case OCF_READ_LOCAL_VERSION:
 		{
-			read_local_version_rp* r = (read_local_version_rp*) req->hr.rparam;
+			read_local_version_rp* r = (read_local_version_rp*) req.hr.rparam;
 
 			const char* hci_ver = hci_vertostr(r->hci_ver);
 			const char* lmp_ver = lmp_vertostr(r->lmp_ver);
@@ -813,7 +886,7 @@ void LocalDevice::Private::info_param_cmd_complete( Request* req )
 			parent->on_get_version
 			(
 				r->status,
-				req->cookie,
+				req.cookie,
 				hci_ver,
 				r->hci_rev,
 				lmp_ver,
@@ -824,11 +897,11 @@ void LocalDevice::Private::info_param_cmd_complete( Request* req )
 		}
 		case OCF_READ_LOCAL_FEATURES:
 		{
-			read_local_features_rp* r = (read_local_features_rp*) req->hr.rparam;
+			read_local_features_rp* r = (read_local_features_rp*) req.hr.rparam;
 
 			char* lmp_feat = lmp_featurestostr(r->features," ",0);
 
-			parent->on_get_features(r->status,req->cookie,lmp_feat);
+			parent->on_get_features(r->status,req.cookie,lmp_feat);
 			 //todo: format this field as a string array
 
 			free(lmp_feat);
@@ -838,53 +911,30 @@ void LocalDevice::Private::info_param_cmd_complete( Request* req )
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::status_param_cmd_complete( Request* req )
+void LocalDevice::Private::status_param_cmd_complete( Request& req )
 {
 }
 
-void LocalDevice::Private::hci_event_received( Request* req )
+void LocalDevice::Private::hci_event_received( Request& req )
 {
 	hci_dbg_enter();
 
-	switch(req->hr.event)
+	switch(req.hr.event)
 	{
-		case EVT_INQUIRY_RESULT:
-		{
-			inquiry_info* r = (inquiry_info*) req->hr.rparam;
-
-			BdAddr addr (r->bdaddr.b);
-
-			RemoteInfo info =
-			{
-				addr,
-				{
-					r->dev_class[0],
-					r->dev_class[1],
-					r->dev_class[2],
-				},
-				r->pscan_rep_mode,
-				r->pscan_period_mode,
-				r->pscan_mode,
-				r->clock_offset
-			};
-
-			update_cache(info);
-			break;
-		}
 		case EVT_INQUIRY_COMPLETE:
 		{
 			finalize_cache();
 
-			//u16* status = (u16*) req->hr.rparam;
+			//u16* status = (u16*) req.hr.rparam;
 
-			parent->on_inquiry_complete(0, req->cookie);
+			parent->on_inquiry_complete(0, req.cookie);
 			break;
 		}
 		/*	remote commands
 		*/
 		case EVT_REMOTE_NAME_REQ_COMPLETE:
 		{
-			evt_remote_name_req_complete* r = (evt_remote_name_req_complete*) req->hr.rparam;
+			evt_remote_name_req_complete* r = (evt_remote_name_req_complete*) req.hr.rparam;
 
 			char straddr[18] = {0};
 			ba2str(&(r->bdaddr),straddr);
@@ -893,7 +943,7 @@ void LocalDevice::Private::hci_event_received( Request* req )
 
 			if( i != inquiry_cache.end() )
 			{
-				i->second->on_get_name(r->status, req->cookie, (char*)r->name);
+				i->second->on_get_name(r->status, req.cookie, (char*)r->name);
 			}
 			else
 			{
@@ -903,15 +953,15 @@ void LocalDevice::Private::hci_event_received( Request* req )
 		}		
 		case EVT_READ_REMOTE_VERSION_COMPLETE:
 		{
-			evt_read_remote_version_complete* r = (evt_read_remote_version_complete*) req->hr.rparam;
+			evt_read_remote_version_complete* r = (evt_read_remote_version_complete*) req.hr.rparam;
 
 			const char* lmp_ver = lmp_vertostr(r->lmp_ver);
 			const char* comp_str = bt_compidtostr(r->manufacturer);
 
-			req->src.remote->on_get_version
+			req.src.remote->on_get_version
 			(
 				r->status,
-				req->cookie,
+				req.cookie,
 				lmp_ver,
 				r->lmp_subver,
 				comp_str
@@ -920,24 +970,24 @@ void LocalDevice::Private::hci_event_received( Request* req )
 		}
 		case EVT_READ_REMOTE_FEATURES_COMPLETE:
 		{
-			evt_read_remote_features_complete* r = (evt_read_remote_features_complete*) req->hr.rparam;
+			evt_read_remote_features_complete* r = (evt_read_remote_features_complete*) req.hr.rparam;
 
 			char* lmp_feat = lmp_featurestostr(r->features," ",0);
-			req->src.remote->on_get_features(r->status, req->cookie, lmp_feat);
+			req.src.remote->on_get_features(r->status, req.cookie, lmp_feat);
 			break;
 		}
 		case EVT_READ_CLOCK_OFFSET_COMPLETE:
 		{
-			evt_read_clock_offset_complete* r = (evt_read_clock_offset_complete*) req->hr.rparam;
+			evt_read_clock_offset_complete* r = (evt_read_clock_offset_complete*) req.hr.rparam;
 
-			req->src.remote->on_get_clock_offset(r->status, req->cookie, r->clock_offset);
+			req.src.remote->on_get_clock_offset(r->status, req.cookie, r->clock_offset);
 			break;
 		}
 		/*	connection
 		*/
 		case EVT_CONN_COMPLETE:
 		{
-			evt_conn_complete* r = (evt_conn_complete*) req->hr.rparam;
+			evt_conn_complete* r = (evt_conn_complete*) req.hr.rparam;
 
 			if(r->status)
 			{
@@ -964,13 +1014,13 @@ void LocalDevice::Private::hci_event_received( Request* req )
 					hci_dbg("connection from non cached device %s!",straddr);
 				}
 			}
-//			req->dest_type = Request::REMOTE;
-//			req->dest.rem = i->second;
+//			req.dest_type = Request::REMOTE;
+//			req.dest.rem = i->second;
 			break;
 		}
 		case EVT_DISCONN_COMPLETE:
 		{
-			evt_disconn_complete* r = (evt_disconn_complete*) req->hr.rparam;
+			evt_disconn_complete* r = (evt_disconn_complete*) req.hr.rparam;
 
 			/* find connection object and delete it
 			*/
@@ -988,38 +1038,69 @@ void LocalDevice::Private::hci_event_received( Request* req )
 	hci_dbg_leave();
 }
 
+void LocalDevice::Private::hci_event_inquiry_result( u8 nrsp, inquiry_info* ii )
+{
+	for( u8 i = 0; i < nrsp; ++i )
+	{
+		inquiry_info* iii = ii+i;
+
+		BdAddr addr (iii->bdaddr.b);
+
+		RemoteInfo info =
+		{
+			addr,
+			{
+				iii->dev_class[0],
+				iii->dev_class[1],
+				iii->dev_class[2],
+			},
+			iii->pscan_rep_mode,
+			iii->pscan_period_mode,
+			iii->pscan_mode,
+			iii->clock_offset
+		};
+		update_cache(info);
+	}
+}
+
+void LocalDevice::Private::hci_event_conn_complete( evt_conn_complete* evt )
+{
+}
+
+void LocalDevice::Private::hci_event_disconn_complete( evt_disconn_complete* evt )
+{
+}
+
+
 /*
 */
 
 LocalDevice::LocalDevice( const char* dev_name )
+:	pvt( new Private(this, hci_devid(dev_name)) )
 {
-	pvt = new Private;
-	pvt->parent = this;
-	pvt->id = hci_devid(dev_name);
-	pvt->notifier = NULL;
-
 	up();
 	pvt->init();
 }
 
 LocalDevice::LocalDevice( int dev_id )
+:	pvt( new Private(this, dev_id) )
 {
-	pvt = new Private;
-	pvt->parent = this;
-	pvt->id = dev_id;
-	pvt->notifier = NULL;
-
 	up();
 	pvt->init();
 }
 
 LocalDevice::~LocalDevice()
 {
-	if(noref())
-	{
-		delete pvt->notifier;
-		delete pvt;
-	}
+}
+
+void* LocalDevice::data()
+{
+	return pvt->data;
+}
+
+void LocalDevice::data( void* p )
+{
+	pvt->data = p;
 }
 
 Socket& LocalDevice::descriptor()
@@ -1150,7 +1231,8 @@ void LocalDevice::set_auth_enable( u8 enable, void* cookie, int timeout )
 	u8* auth = new u8;
 	*auth = enable;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_WRITE_AUTH_ENABLE;
 	req->hr.cparam = auth;
@@ -1158,20 +1240,21 @@ void LocalDevice::set_auth_enable( u8 enable, void* cookie, int timeout )
 	req->hr.rparam = NULL;
 	req->hr.rlen   = 1;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
 }
 void LocalDevice::get_auth_enable( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_AUTH_ENABLE;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = 1;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1190,7 +1273,8 @@ void LocalDevice::set_encrypt_mode( u8 encrypt, void* cookie, int timeout )
 	u8* mode = new u8;
 	*mode = encrypt;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_WRITE_ENCRYPT_MODE;
 	req->hr.cparam = mode;
@@ -1198,20 +1282,21 @@ void LocalDevice::set_encrypt_mode( u8 encrypt, void* cookie, int timeout )
 	req->hr.rparam = NULL;
 	req->hr.rlen   = 1;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
 }
 void LocalDevice::get_encrypt_mode( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_ENCRYPT_MODE;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = 1;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1246,13 +1331,14 @@ bool LocalDevice::get_secman_enable()
 
 void LocalDevice::get_scan_enable( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_SCAN_ENABLE;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_SCAN_ENABLE_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1271,7 +1357,8 @@ void LocalDevice::set_scan_enable( u8 type, void* cookie, int timeout )
 	u8* enable = new u8;
 	*enable = type;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_WRITE_SCAN_ENABLE;
 	req->hr.cparam = enable;
@@ -1279,7 +1366,7 @@ void LocalDevice::set_scan_enable( u8 type, void* cookie, int timeout )
 	req->hr.rparam = NULL;
 	req->hr.rlen   = 1;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1326,13 +1413,14 @@ bool LocalDevice::get_iscan_enable( void* cookie, int timeout )
 
 void LocalDevice::get_name( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_LOCAL_NAME;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_NAME_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1345,13 +1433,14 @@ void LocalDevice::set_name( const char* name, void* cookie, int timeout )
 	memset(cp, 0, sizeof(change_local_name_cp));
 	strncpy((char*)cp->name, name, sizeof(cp->name));
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_CHANGE_LOCAL_NAME;
 	req->hr.cparam = cp;
 	req->hr.clen   = CHANGE_LOCAL_NAME_CP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1359,13 +1448,14 @@ void LocalDevice::set_name( const char* name, void* cookie, int timeout )
 
 void LocalDevice::get_class( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_CLASS_OF_DEV;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_CLASS_OF_DEV_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1378,13 +1468,14 @@ void LocalDevice::set_class( u8 major, u8 minor, u8 x, void* cookie, int timeout
 	cp->dev_class[1] = minor;
 	cp->dev_class[2] = x;	
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_WRITE_CLASS_OF_DEV;
 	req->hr.cparam = cp;
 	req->hr.clen   = WRITE_CLASS_OF_DEV_CP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1392,13 +1483,14 @@ void LocalDevice::set_class( u8 major, u8 minor, u8 x, void* cookie, int timeout
 
 void LocalDevice::get_voice_setting( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_READ_VOICE_SETTING;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_VOICE_SETTING_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1409,13 +1501,14 @@ void LocalDevice::set_voice_setting( u16 vs, void* cookie, int timeout )
 	write_voice_setting_cp* cp = new write_voice_setting_cp;
 	cp->voice_setting = vs;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_HOST_CTL;
 	req->hr.ocf    = OCF_WRITE_VOICE_SETTING;
 	req->hr.cparam = cp;
 	req->hr.clen   = WRITE_VOICE_SETTING_CP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1423,13 +1516,14 @@ void LocalDevice::set_voice_setting( u16 vs, void* cookie, int timeout )
 
 void LocalDevice::get_version( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_LOCAL_VERSION;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_VERSION_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1437,13 +1531,14 @@ void LocalDevice::get_version( void* cookie, int timeout )
 
 void LocalDevice::get_features( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_LOCAL_FEATURES;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_LOCAL_FEATURES_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1469,13 +1564,14 @@ void LocalDevice::get_address( void* cookie, int timeout )
 		return;
 	}
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_INFO_PARAM;
 	req->hr.ocf    = OCF_READ_BD_ADDR;
 	req->hr.rparam = NULL;
 	req->hr.rlen   = READ_BD_ADDR_RP_SIZE;
 
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->cookie = cookie;
 
 	pvt->post_req(req);
@@ -1500,7 +1596,8 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 	cp->length = 0x10;
 	cp->num_rsp = 0;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_INQUIRY;
 	req->hr.event  = EVT_INQUIRY_COMPLETE;
@@ -1510,19 +1607,20 @@ void LocalDevice::start_inquiry( u8* lap, u32 flags, void* cookie )
 	req->hr.rlen   = INQUIRY_INFO_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(25000);
+	req->to->interval(25000);
 
 	pvt->post_req(req);
 }
 
 void LocalDevice::cancel_inquiry( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_INQUIRY_CANCEL;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 
 	pvt->post_req(req);
 }
@@ -1545,7 +1643,8 @@ void LocalDevice::start_periodic_inquiry( u8* lap, u16 period, void* cookie, int
 	cp->max_period = period + 0x20;
 	cp->min_period = period - 0x20;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_PERIODIC_INQUIRY;
 	req->hr.event  = EVT_INQUIRY_COMPLETE;
@@ -1555,23 +1654,36 @@ void LocalDevice::start_periodic_inquiry( u8* lap, u16 period, void* cookie, int
 	req->hr.rlen   = INQUIRY_INFO_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 
 	pvt->post_req(req);
 }
 
 void LocalDevice::cancel_periodic_inquiry( void* cookie, int timeout )
 {
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_EXIT_PERIODIC_INQUIRY;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 
 	pvt->post_req(req);
 }
 
+/*	inquiry cache
+*/
+
+const RemoteDevPTable& LocalDevice::get_inquiry_cache()
+{
+	return pvt->inquiry_cache;
+}
+
+void LocalDevice::clear_cache()
+{
+	pvt->clear_cache();
+}
 
 /*
 */
@@ -1581,14 +1693,24 @@ RemoteDevice::RemoteDevice
 	LocalDevice* loc_dev,
 	RemoteInfo& info
 )
-:	_info(info),
-	_local_dev(loc_dev)
+:	_local_dev(loc_dev)
 {
-
+	update(info);
 }
 
 RemoteDevice::~RemoteDevice()
 {}
+
+
+void* RemoteDevice::data()
+{
+	return _data;
+}
+
+void RemoteDevice::data( void* p )
+{
+	_data = p;
+}
 
 bool RemoteDevice::remove_connection( u16 handle )
 {
@@ -1611,7 +1733,8 @@ void RemoteDevice::get_name( void* cookie, int timeout )
 	cp->pscan_mode	   = _info.pscan_mode;
 	cp->clock_offset   = _info.clk_offset;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_REMOTE_NAME_REQ;
@@ -1622,10 +1745,30 @@ void RemoteDevice::get_name( void* cookie, int timeout )
 	req->hr.rlen   = EVT_REMOTE_NAME_REQ_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
+}
+
+
+void RemoteDevice::get_address( void* cookie, int timeout )
+{
+	const char* address = addr().to_string().c_str();
+
+	this->on_get_address(0, cookie, address);
+	_local_dev->on_after_event(0,cookie);
+	return;
+}
+
+
+void RemoteDevice::get_class( void* cookie, int timeout )
+{
+	u8* cls = _info.dev_class;
+
+	this->on_get_class(0, cookie, cls);
+	_local_dev->on_after_event(0,cookie);
+	return;
 }
 
 void RemoteDevice::get_version( void* cookie, int timeout )
@@ -1638,7 +1781,8 @@ void RemoteDevice::get_version( void* cookie, int timeout )
 	read_remote_version_cp* cp = new read_remote_version_cp;
 	cp->handle = _connections[0]->handle();
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_READ_REMOTE_VERSION;
@@ -1649,7 +1793,7 @@ void RemoteDevice::get_version( void* cookie, int timeout )
 	req->hr.rlen   = EVT_READ_REMOTE_VERSION_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
@@ -1665,7 +1809,8 @@ void RemoteDevice::get_features( void* cookie, int timeout )
 	read_remote_features_cp* cp = new read_remote_features_cp;
 	cp->handle = _connections[0]->handle();
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_READ_REMOTE_FEATURES;
@@ -1676,7 +1821,7 @@ void RemoteDevice::get_features( void* cookie, int timeout )
 	req->hr.rlen   = EVT_READ_REMOTE_FEATURES_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
@@ -1692,7 +1837,8 @@ void RemoteDevice::get_clock_offset( void* cookie, int timeout )
 	read_clock_offset_cp* cp = new read_clock_offset_cp;
 	cp->handle = _connections[0]->handle();
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_READ_CLOCK_OFFSET;
@@ -1703,7 +1849,7 @@ void RemoteDevice::get_clock_offset( void* cookie, int timeout )
 	req->hr.rlen   = EVT_READ_CLOCK_OFFSET_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
@@ -1725,7 +1871,8 @@ void RemoteDevice::create_acl_connection
 	cp->clock_offset   = clock_offset();
 	cp->role_switch    = change_role ? 1 : 0;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_CREATE_CONN;
@@ -1736,7 +1883,7 @@ void RemoteDevice::create_acl_connection
 	req->hr.rlen   = EVT_CONN_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
@@ -1754,7 +1901,8 @@ void RemoteDevice::create_sco_connection
 	cp->handle = handle;
 	cp->pkt_type = ptype;
 
-	Request* req = new Request;
+	RefPtr<Request> req (new Request);
+
 
 	req->hr.ogf    = OGF_LINK_CTL;
 	req->hr.ocf    = OCF_ADD_SCO;
@@ -1765,7 +1913,7 @@ void RemoteDevice::create_sco_connection
 	req->hr.rlen   = EVT_CONN_COMPLETE_SIZE;
 
 	req->cookie = cookie;
-	req->to.interval(timeout);
+	req->to->interval(timeout);
 	req->src.remote = this;
 
 	_local_dev->pvt->post_req(req);
@@ -1775,10 +1923,7 @@ void RemoteDevice::update( RemoteInfo& info )
 {
 	_info = info;
 
-	timeval now;
-	gettimeofday(&now, NULL);
-
-	_time_last_updated = now.tv_sec*1000 + now.tv_usec/1000;
+	gettimeofday(&_time_last_updated, NULL);
 }
 
 }//namespace Hci

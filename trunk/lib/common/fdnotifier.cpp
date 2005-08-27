@@ -1,7 +1,7 @@
 #include <algorithm>
 #include "fdnotifier.h"
 
-extern FdNotifierPList g_fdnotifier_plist;
+extern FdNotifierRList g_fdnotifier_rlist;
 
 struct FdNotifier::Private
 {
@@ -9,33 +9,56 @@ struct FdNotifier::Private
 	int	flags;
 	int	state;
 	void*	data;
+
+	~Private();
 };
 
-FdNotifier::FdNotifier( int fd, int flags )
+FdNotifier::Private::~Private()
 {
-	pvt = new Private;
+}
+
+FdNotifier* FdNotifier::create( int fd , int flags )
+{
+	FdNotifier* nf = new FdNotifier(fd, flags);
+
+	RefPtr<FdNotifier> rfd (nf);
+
+	g_fdnotifier_rlist.push_back(rfd);
+
+	return nf;
+}
+
+void FdNotifier::destroy( FdNotifier* fn )
+{
+	FdNotifierRList::iterator i = g_fdnotifier_rlist.begin();
+
+	while( i != g_fdnotifier_rlist.end() )
+	{
+		if( &(*(*i)) == fn )
+		{
+			FdNotifierRList::iterator n = i;
+			n++;
+			g_fdnotifier_rlist.erase(i);
+			i = n;
+		}
+		else
+		{
+			++i;
+		}
+	}
+}
+
+FdNotifier::FdNotifier( int fd, int flags )
+:	pvt(new Private)
+{
 	pvt->fd = fd;
 	pvt->flags = flags;
 	pvt->state = 0;
 	pvt->data = NULL;
-
-	g_fdnotifier_plist.push_back(this);
 }
 
 FdNotifier::~FdNotifier()
 {
-	if(noref())
-	{
-		FdNotifierPList::iterator i =
-			std::find(
-				g_fdnotifier_plist.begin(),
-				g_fdnotifier_plist.end(),
-				this
-			);
-
-		if(i != g_fdnotifier_plist.end()) 
-			g_fdnotifier_plist.erase(i);
-	}
 }
 
 int FdNotifier::fd() const

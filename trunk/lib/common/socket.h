@@ -3,6 +3,7 @@
 
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
 
@@ -80,6 +81,15 @@ public:
 	{
 		int fl = block ? flags() | O_NONBLOCK : flags() & ~O_NONBLOCK;
 		return ::fcntl(_fd, F_SETFL, fl) < 0;
+	}
+
+	int available()
+	{
+		int bytes;
+		if( ::ioctl(_fd, FIONREAD, (ulong*)&bytes) < 0 )
+			return -1;
+		else
+			return bytes;
 	}
 
 protected:

@@ -20,14 +20,14 @@ int main()
 
 	try
 	{
-		Bluetool::ServiceLoader::init();
+	//	Bluetool::ServiceLoader::init();
 
 		Bluetool::RootService btool_service;
 		Bluetool::DeviceManager	device_manager;
 
 		main_loop.enter();
 
-		Bluetool::ServiceLoader::finalize();
+	//	Bluetool::ServiceLoader::finalize();
 	}
 	catch( std::exception& e )
 	{

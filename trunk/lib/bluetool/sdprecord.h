@@ -2,36 +2,36 @@
 #define __SDP_RECORD_H
 
 #include <common/types.h>
-#include <common/refcnt.h>
+#include <common/refptr.h>
 
 #include <sigc++/sigc++.h>
 #include <list>
 #include <string>
+#include <vector>
 
 namespace Sdp
 {
 	class DataElement;	
-	typedef std::list<DataElement> DataElementSeq;
+	typedef std::vector<DataElement> DataElementList;
+
+	class DataElementSeq;
+	typedef std::list<DataElementSeq> DataElementSeqList;
 
 	class Bool;
+	class U16;
 	class U32;
-	//typedef std::list<U32> U32Seq;
 	class String;
 	class UUID;
-	//typedef std::list<UUID> UUIDSeq;
 
 	class Attribute;
+	typedef std::list<Attribute> AttributeList;
+	typedef std::list< RefPtr<Attribute> > AttributeRList;
 
 	class Record;
 	typedef std::list<Record> RecordList;
 
 	typedef sigc::signal<void, u16, const RecordList&> SdpEvent;
 }
-
-#include "sdpsession.h"
-
-/*
-*/
 
 namespace Sdp
 {
@@ -40,25 +40,79 @@ class DataElement
 {
 protected:
 	DataElement();
+
 public:
-	DataElement( const DataElement& );
 	virtual ~DataElement();
 
 	const DataElement& operator = ( const DataElement& );
 
-/*	operator Bool&();
+	bool is_seq();
+	bool is_bool();
+	bool is_string();
+	bool is_uuid();
+
+	operator DataElement&();	//needed by subclasses
+
+	operator DataElementSeq&();
+	operator Bool&();
+	operator U16&();
 	operator U32&();
 	operator String&();
 	operator UUID&();
-*/
+
 	struct Private;
 
 protected:
-	Private* pvt;
+	RefPtr<Private> pvt;
 
-friend class Session;
 friend class Record;
+friend class Client;
+friend class DataElementSeq;
 };
+
+class DataElementSeq : public DataElement
+{
+public:
+	DataElementSeq();
+
+	DataElementList::iterator begin();
+
+	DataElementList::iterator end();
+
+	DataElementList::const_iterator begin() const;
+
+	DataElementList::const_iterator end() const;
+
+	void push_back( DataElement& );
+
+	void erase( DataElementList::iterator& );
+};
+
+#if 0
+class DataElementSeq::iterator
+{
+public:
+	const iterator& operator ++ ();
+
+	bool operator == ( const iterator& );
+	bool operator != ( const iterator& i )
+	{
+		return !((*this)==i);
+	}
+
+	DataElement* operator * ();
+	DataElement* operator -> ();
+
+private:
+	iterator( DataElementList::iterator );
+
+	iterator( DataElementList::const_iterator );
+
+	DataElementList::iterator it;
+
+friend class DataElementSeq;
+};
+#endif
 
 class Bool : public DataElement
 {
@@ -68,6 +122,17 @@ public:
 	bool to_bool();
 
 	void operator = ( bool b );
+};
+
+
+class U16 : public DataElement
+{
+public:
+	U16( u16 );
+
+	u16 to_u16();
+
+	void operator = ( u16 u );
 };
 
 class U32 : public DataElement
@@ -85,7 +150,7 @@ class String : public DataElement
 public:
 	String( const char* );
 
-	std::string to_string();
+	const char* to_string();
 
 	void operator = ( std::string& s );
 };
@@ -99,7 +164,8 @@ public:
 
 	UUID( u128 );
 
-	std::string to_string();
+	const char* to_string();
+	u16 to_u16();
 
 	bool operator == ( const UUID& );
 
@@ -113,27 +179,41 @@ class Record
 public:
 	Record();
 
-	Record( const Record& );
+	DataElement& operator[]( u16 attr_id ) const;
 
-	~Record();
+//	DataElementSeq& get_seq_attr( u16 attr_id );
 
-	Attribute operator[]( u16 attr_id );
-
-	u32 handle();
+	u32 handle() const;
 
 	void add( Attribute& );
 
 	void remove( u16 attr_id );
+
+	String& get_service_name() const;
+
+	String& get_service_desc() const;
+
+	String& get_provider_name() const;
+
+	String& get_doc_url() const;
+
+	U32& get_state() const;
+
+	UUID& get_service_id() const;
+
+	UUID& get_group_id() const;
+
+	DataElementSeq& get_class_id_list() const;
+
+	DataElementSeq& get_profile_desc_list() const;
+
+	DataElementSeq& get_protocol_desc_list() const;
 /*
 	languages();
 
 	profile_descriptions();
 
 	server_versions();
-
-	UUID& service_id();
-
-	UUID& group_id();
 
 	U32& record_state();
 
@@ -149,23 +229,20 @@ public:
 
 	class iterator;
 
-	iterator begin();
-	iterator end();
+	iterator begin() const;
+	iterator end() const;
 
 	struct Private;
 
 	Record( Private* );
 
 private:
-	Private* pvt;
+	RefPtr<Private> pvt;
 };
-
 
 class Record::iterator
 {
 public:
-	iterator(Record::Private* );
-
 	const iterator& operator ++();
 
 	bool operator == (const iterator& i);
@@ -174,14 +251,16 @@ public:
 		return !((*this)==i);
 	}
 
-	Attribute operator *();
+	Attribute* operator *();
 
-	Attribute operator ->();
+	Attribute* operator ->();
 	
 private:
-	struct Private;
+	iterator( AttributeList::iterator );
 
-	Private* pvt;
+	AttributeList::iterator it;
+
+friend class Record;
 };
 
 
@@ -193,9 +272,11 @@ public:
 	u16 id();
 
 	DataElement& elem();
+
 private:
 	Attribute();
 
+friend class Record;
 friend class Record::iterator;
 };
 

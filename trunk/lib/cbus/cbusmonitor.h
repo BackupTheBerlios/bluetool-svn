@@ -14,12 +14,12 @@ namespace DBus
 
 #include "../common/fdnotifier.h"
 #include "../common/timeout.h"
-//#include "../common/refcnt.h"
+#include "../common/refptr.h"
 
 namespace DBus
 {
 
-class Monitor //: public sigc::trackable // : public RefCnt
+class Monitor
 {
 public:
 	Monitor();

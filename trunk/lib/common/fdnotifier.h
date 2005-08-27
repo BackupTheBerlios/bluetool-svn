@@ -4,21 +4,27 @@
 #include <sys/poll.h>
 #include <list>
 #include <sigc++/sigc++.h>
-#include "refcnt.h"
+#include "refptr.h"
 
 class FdNotifier;
 
 typedef sigc::signal<void, FdNotifier&> Readable;
 typedef sigc::signal<void, FdNotifier&> Writable;
 
-class FdNotifier : public RefCnt
+class FdNotifier
 {
 public:
-	FdNotifier( int fd = -1, int flags = 0 );
+	static FdNotifier* create( int fd = -1, int flags = 0 );
+	static void destroy( FdNotifier* fn );
+
 	~FdNotifier();
+
+private:
+	FdNotifier( int fd, int flags );
 
 //	const FdNotifier& operator = ( const FdNotifier& );
 
+public:
 	int fd() const;
 	int flags() const;
 	int state() const;
@@ -35,10 +41,10 @@ public:
 
 private:
 	struct Private;
-	Private* pvt;
+	RefPtr<Private> pvt;
 };
 
 typedef std::list<FdNotifier> FdNotifierList;
-typedef std::list<FdNotifier*> FdNotifierPList;
+typedef std::list< RefPtr<FdNotifier> > FdNotifierRList;
 
 #endif//__CBUS_FD_NOTIFIER_H

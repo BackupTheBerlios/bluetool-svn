@@ -45,75 +45,50 @@ Device::Device( int dev_id, const BdAddr& dev_addr ) //TODO: only the second par
 {}
 
 Device::~Device()
-{}
-
-/*	signals
-*/
-
-void Device::DeviceInRange( const RemoteDevice& hr )
 {
-	/* todo: I don't like this way of sending signals
-	*/
-	DBus::SignalMessage sig
-	(
-		BTOOL_DEVMAN_PATH, //TODO
-		iname().c_str(),
-		"DeviceInRange"
-	);
-
-	const char* name = hr.oname().c_str();
-
-	sig.append
-	(
-		DBUS_TYPE_STRING, &(name),
-		DBUS_TYPE_INVALID
-	);
-
-	conn().send(sig);
-}
-
-void Device::DeviceOutOfRange( const RemoteDevice& hr )
-{
-	/* todo: I don't like this way of sending signals
-	*/
-	DBus::SignalMessage sig
-	(
-		BTOOL_DEVMAN_PATH, //TODO
-		iname().c_str(),
-		"DeviceOutOfRange"
-	);
-
-	const char* name = hr.oname().c_str();
-
-	sig.append
-	(
-		DBUS_TYPE_STRING, &(name),
-		DBUS_TYPE_INVALID
-	);
-
-	conn().send(sig);
+	HciDevice::clear_cache();
 }
 
 Hci::RemoteDevice* Device::on_new_cache_entry( Hci::RemoteInfo& info )
 {
 	RemoteDevice* hr = new RemoteDevice(this,info);
 
-	this->DeviceInRange(*hr); //todo: move those signals in this file
+	//this->DeviceInRange(*hr); //todo: move those signals in this file
 
 	return hr;
 }
 
 RemoteDevice::RemoteDevice( Device* parent, Hci::RemoteInfo& info )
 :	HciRemote(parent,info),
-	SdpBrowser(parent,info.addr),
+	SdpBrowser(parent->addr(),info.addr),
 	DBus::LocalObject(_gen_rem_name(parent,info.addr), DBus::Connection::SystemBus()),
 
 	_parent(parent)
-{}
+{
+	DBus::SignalMessage sig("DeviceInRange");
+
+	const char* name = oname().c_str();
+
+	sig.append
+	(
+		DBUS_TYPE_STRING, &(name),
+		DBUS_TYPE_INVALID
+	);
+	_parent->emit_signal(sig);
+}
 
 RemoteDevice::~RemoteDevice()
 {
-	_parent->DeviceOutOfRange(*this);
+	DBus::SignalMessage sig("DeviceOutOfRange");
+
+	const char* name = oname().c_str();
+
+	sig.append
+	(
+		DBUS_TYPE_STRING, &(name),
+		DBUS_TYPE_INVALID
+	);
+	_parent->emit_signal(sig);
 }
 
 Hci::Connection* RemoteDevice::on_new_connection( Hci::ConnInfo& info )

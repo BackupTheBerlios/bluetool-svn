@@ -3,6 +3,7 @@
 
 #include <cbus/cbus.h>
 #include <bluetool/bdaddr.h>
+#include "btool_service.h"
 #include "btool_service_loader.h"
 #include "../btool_names.h"
 
@@ -18,6 +19,7 @@ public:
 	void ListServices	( const DBus::CallMessage& );
 
 private:
+	ServicePList _services;
 	std::string _conf_root;
 
 };

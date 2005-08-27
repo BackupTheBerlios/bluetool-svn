@@ -2,6 +2,7 @@
 #define __BTOOL_SERVICE_H
 
 #include <string>
+#include <list>
 
 #include <common/configfile.h>
 #include <cbus/cbus.h>
@@ -9,6 +10,10 @@
 
 namespace Bluetool
 {
+
+class Service;
+
+typedef std::list<Service*> ServicePList;
 
 class Service : public DBus::LocalInterface, public DBus::LocalObject
 {

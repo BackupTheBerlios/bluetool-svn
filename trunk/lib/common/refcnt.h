@@ -1,4 +1,4 @@
-	#ifndef __REF_CNT_H
+#ifndef __REF_CNT_H
 #define __REF_CNT_H
 
 #include "debug.h"
@@ -24,31 +24,47 @@ public:
 
 	virtual ~RefCnt()
 	{
-		if(noref())	delete __ref;
-		else		unref();
+		unref();
 	}
 
-protected:
-	bool noref()
+	RefCnt& operator = ( const RefCnt& ref )
+	{
+		ref.ref();
+		unref();
+		__ref = ref.__ref;
+		return *this;
+	}
+
+	bool noref() const
+	{
+		return (*__ref) == 0;
+	}
+
+	bool one() const
 	{
 		return (*__ref) == 1;
 	}
 
 private:
-	void ref()
+	void ref() const
 	{
-		++ (*__ref);
+		++ (*__ref);	_dbg("%p+)%d",__ref,*__ref);
 	}
-	void unref()
-	{	// returns true when object can be finalized
-	
+	void unref() const
+	{
 		-- (*__ref);
 
 		if( (*__ref) < 0 )
 		{
-			_dbg("refcount dropped below zero!!!!");
+			_dbg("refcount dropped below zero!!!!"); //should throw stg here
 		}
-	
+
+		_dbg("%p-)%d",__ref,*__ref);
+
+		if( noref() )
+		{
+			delete __ref;
+		}
 	}
 private:
 	int *__ref;

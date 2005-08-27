@@ -4,16 +4,19 @@
 #include <common/types.h>
 #include <common/fdnotifier.h>
 #include <common/timeout.h>
-#include <common/refcnt.h>
+#include <common/refptr.h>
 
 #include <string>
 #include <list>
+#include <map>
 
 namespace Hci
 {
 	class LocalDevice;
 
 	class RemoteDevice;
+
+	typedef std::map<std::string,RemoteDevice*> RemoteDevPTable;
 
 	struct RemoteInfo;
 }
@@ -26,7 +29,7 @@ namespace Hci
 namespace Hci
 {
 
-class LocalDevice : public RefCnt
+class LocalDevice
 {
 public:
 
@@ -100,6 +103,16 @@ public:
 
 	void start_periodic_inquiry( u8* lap, u16 period, void* cookie, int timeout );
 	void cancel_periodic_inquiry( void* cookie, int timeout );
+
+	/*	inquiry cache
+	*/
+	const RemoteDevPTable& get_inquiry_cache();
+	void clear_cache();
+
+	/*	utilily methods for wrappers
+	*/
+	void* data();
+	void  data( void* );
 
 private:
 	/*	event handlers
@@ -241,7 +254,7 @@ public:
 	struct Private;
 
 private:	
-	Private* pvt;
+	RefPtr<Private> pvt;
 
 friend class RemoteDevice;
 friend class Connection;	
@@ -290,6 +303,10 @@ public:
 	*/
 	void get_name( void* cookie, int timeout );
 
+	void get_address( void* cookie, int timeout );
+
+	void get_class( void* cookie, int timeout );
+
 	void get_version( void* cookie, int timeout );	//ACL connection needed
 
 	void get_features( void* cookie, int timeout );	//ACL connection needed
@@ -316,7 +333,12 @@ public:
 	*/
 	void update( RemoteInfo& );
 
-	inline double last_updated() const;
+	inline const timeval& last_updated() const;
+
+	/*	utilily methods for wrappers
+	*/
+	void* data();
+	void  data( void* );
 
 private:
 	/*	event handlers
@@ -326,6 +348,20 @@ private:
 		u16 status,
 		void* cookie,
 		const char* name
+	) = 0;
+
+	virtual void on_get_address
+	(	
+		u16 status,
+		void* cookie,
+		const char* addr
+	) = 0;
+
+	virtual void on_get_class
+	(
+		u16 status,
+		void* cookie,
+		u8* dev_class
 	) = 0;
 
 	virtual void on_get_version
@@ -371,7 +407,9 @@ private:
 
 	ConnPTable	_connections;
 
-	double		_time_last_updated;
+	timeval		_time_last_updated;
+
+	void*		_data;
 
 friend struct LocalDevice::Private;
 };
@@ -386,7 +424,7 @@ LocalDevice* RemoteDevice::local()
 	return _local_dev;
 }
 
-double RemoteDevice::last_updated() const
+const timeval& RemoteDevice::last_updated() const
 {
 	return _time_last_updated;
 }

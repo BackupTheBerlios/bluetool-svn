@@ -34,8 +34,7 @@ public:
 
 	inline const std::string& oname() const;
 
-protected:
-
+	const Object* object() const;
 	
  	inline Connection& conn();
 
@@ -77,6 +76,8 @@ public:
 	LocalObject( const char* name, Connection& conn );
 
 	~LocalObject();
+
+	void remit_signal( SignalMessage& );
 
 private:
 

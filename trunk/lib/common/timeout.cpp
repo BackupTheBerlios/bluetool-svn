@@ -2,7 +2,38 @@
 #include <algorithm>
 #include "timeout.h"
 
-extern TimeoutPList g_timeout_plist;
+extern TimeoutRList g_timeout_rlist;
+
+Timeout* Timeout::create( int interval )
+{
+	Timeout* nt = new Timeout(interval);
+
+	RefPtr<Timeout> rt (nt);
+
+	g_timeout_rlist.push_back(rt);
+
+	return nt;
+}
+
+void Timeout::destroy( Timeout* t )
+{
+	TimeoutRList::iterator i = g_timeout_rlist.begin();
+
+	while( i != g_timeout_rlist.end() )
+	{
+		if( &(*(*i)) == t )
+		{
+			TimeoutRList::iterator n = i;
+			n++;
+			g_timeout_rlist.erase(i);
+			i = n;
+		}
+		else
+		{
+			++i;
+		}
+	}
+}
 
 struct Timeout::Private
 {
@@ -14,8 +45,8 @@ struct Timeout::Private
 };
 
 Timeout::Timeout( int interval )
+:	pvt ( new Private )
 {
-	pvt = new Private;
 	pvt->interval = interval;
 	pvt->timeslice = interval;
 	pvt->data = NULL;
@@ -25,26 +56,10 @@ Timeout::Timeout( int interval )
 	gettimeofday(&started, NULL);
 
 	pvt->started = started.tv_sec*1000 + started.tv_usec/1000.0;
-
-	g_timeout_plist.push_back(this);
 }
 
 Timeout::~Timeout()
-{
-	if(noref())
-	{
-		TimeoutPList::iterator i = 
-			std::find(
-				g_timeout_plist.begin(),
-				g_timeout_plist.end(),
-				this
-			);
-
-		if( i != g_timeout_plist.end() ) g_timeout_plist.erase(i);
-
-		delete pvt;
-	}
-}
+{}
 
 int Timeout::interval() const
 {
@@ -91,9 +106,9 @@ bool Timeout::on()
 	return pvt->on;
 }
 
-void Timeout::update()
+bool Timeout::update()
 {	
-	if(!on()) return;
+	if(!on()) return false;
 
 	timeval now;
 	gettimeofday(&now, NULL);
@@ -102,9 +117,10 @@ void Timeout::update()
 
 	if(now_millis >= pvt->started + pvt->interval)
 	{
-		timed_out(*this);
 		pvt->started = now_millis;
+		return true;
 	}
+	return false;
 }
 
 /*

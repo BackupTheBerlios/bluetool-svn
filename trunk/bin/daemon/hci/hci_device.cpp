@@ -14,6 +14,9 @@
 #include <cstring>
 #include <cstdio>
 
+namespace Bluetool
+{
+
 HciDevice::HciDevice( int dev_id )
 :
 	Hci::LocalDevice	( dev_id ),
@@ -29,6 +32,11 @@ HciDevice::HciDevice( int dev_id )
 	register_method( HciDevice, SetProperty );
 	register_method( HciDevice, StartInquiry );
 	register_method( HciDevice, CancelInquiry );
+	register_method( HciDevice, InquiryCache );
+
+	/*	link with lower-level
+	*/
+	Hci::LocalDevice::data(this);
 }
 
 HciDevice::~HciDevice()
@@ -112,7 +120,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	if( property == "address" )
 		Hci::LocalDevice::get_address(reply, HCI_TIMEOUT);
 	else
-	if( property == "local_name" )
+	if( property == "name" )
 		Hci::LocalDevice::get_name(reply, HCI_TIMEOUT);
 	else
 	if( property == "class" )
@@ -293,7 +301,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	}
 
 	else
-	if( property == "local_name" )
+	if( property == "name" )
 	{
 		const char* name = i.get_string();
 		Hci::LocalDevice::set_name(name, reply, HCI_TIMEOUT);
@@ -410,6 +418,29 @@ void HciDevice::CancelInquiry( const DBus::CallMessage& msg )
 	DBus::ReturnMessage* reply = new DBus::ReturnMessage (msg);
 
 	Hci::LocalDevice::cancel_inquiry(reply, HCI_TIMEOUT);
+}
+
+void HciDevice::InquiryCache( const DBus::CallMessage& msg )
+{
+	DBus::ReturnMessage reply (msg);
+	DBus::MessageIter rw = reply.w_iter();
+	DBus::MessageIter sa = rw.new_array(DBUS_TYPE_STRING);
+
+	const Hci::RemoteDevPTable& inquiry_cache = Hci::LocalDevice::get_inquiry_cache();
+	Hci::RemoteDevPTable::const_iterator i = inquiry_cache.begin();
+	while( i != inquiry_cache.end() )
+	{
+		/* we CAN do that because they're actually the same thing
+		*/
+		const HciRemote* rem = (const HciRemote*)i->second->data();
+
+		const char* fullname = rem->object()->oname().c_str();
+		sa.append_string(fullname);
+		++i;
+	}
+	rw.close_container(sa);
+	reply.append(DBUS_TYPE_INVALID);
+	_bus.send(reply);
 }
 
 #if 0
@@ -770,11 +801,13 @@ HciRemote::HciRemote
 	Hci::RemoteInfo& info
 )
 :	Hci::RemoteDevice( parent, info ),
-	DBus::LocalInterface( BTOOL_REM_IFACE ),
+	DBus::LocalInterface( BTOOL_HCIREMOTE_IFACE ),
 	_bus(DBus::Connection::SystemBus())
 	//DBus::LocalObject( obj_name, DBus::Connection::SystemBus() )
 {
 	register_method( HciRemote, GetProperty );
+
+	Hci::RemoteDevice::data(this);
 }
 
 HciRemote::~HciRemote()
@@ -782,6 +815,39 @@ HciRemote::~HciRemote()
 
 void HciRemote::GetProperty( const DBus::CallMessage& msg )
 {
+	DBus::ReturnMessage *reply = new DBus::ReturnMessage( msg );
+
+	try
+	{
+		DBus::MessageIter i = msg.r_iter();
+		std::string property = i.get_string();
+
+		blue_dbg("method GetProperty(%s) called on %s",property.c_str(),iname().c_str());
+
+		if( property == "name" )	
+			Hci::RemoteDevice::get_name(reply, HCI_TIMEOUT);
+		else
+		if( property == "address" )	
+			Hci::RemoteDevice::get_address(reply, HCI_TIMEOUT);
+		else
+		if( property == "class" )	
+			Hci::RemoteDevice::get_class(reply, HCI_TIMEOUT);
+		else
+		{
+			DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, "No such property");
+			_bus.send(err);
+
+			delete reply;
+		}
+	
+	}
+	catch( std::exception& e )
+	{
+		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
+		_bus.send(err);
+
+		delete reply;
+	}
 }
 
 void HciRemote::CreateConnection( const DBus::CallMessage& msg )
@@ -802,6 +868,38 @@ void HciRemote::on_get_name
 
 	reply->append( DBUS_TYPE_UINT16, &(status),
 		       DBUS_TYPE_STRING, &(name),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciRemote::on_get_address
+(	
+	u16 status,
+	void* cookie,
+	const char* addr
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_STRING, &(addr),
+		       DBUS_TYPE_INVALID
+	);
+}
+
+void HciRemote::on_get_class
+(
+	u16 status,
+	void* cookie,
+	u8* dev_class
+)
+{
+	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
+
+	reply->append( DBUS_TYPE_UINT16, &(status),
+		       DBUS_TYPE_BYTE,   dev_class+0,
+		       DBUS_TYPE_BYTE,   dev_class+1,
+		       DBUS_TYPE_BYTE,   dev_class+2,
 		       DBUS_TYPE_INVALID
 	);
 }
@@ -1000,3 +1098,5 @@ void HciConnection::on_get_rssi
 		       DBUS_TYPE_INVALID
 	);
 }
+
+}//namespace Bluetool

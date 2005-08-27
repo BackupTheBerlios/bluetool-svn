@@ -4,6 +4,7 @@
 #include <bluetool/hcisocket.h>
 #include <cbus/cbus.h>
 #include <common/fdnotifier.h>
+#include <common/refptr.h>
 
 #include "btool_names.h"
 #include "btool_device.h"
@@ -41,9 +42,9 @@ private:
 
 private:
 
-	FdNotifier	_notifier;
+	FdNotifier*	_notifier;
 	Hci::Socket	_evt_socket;
-	DevicePTable	_devices;
+	DeviceRTable	_devices;
 };
 
 }//namespace Bluetool

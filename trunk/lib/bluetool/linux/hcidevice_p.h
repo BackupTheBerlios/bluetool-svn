@@ -5,7 +5,6 @@
 #include "../hcidevice.h"
 
 #include <cstring>
-#include <map>
 
 #include <sys/ioctl.h>
 #include <sys/errno.h>
@@ -18,24 +17,26 @@
 namespace Hci
 {
 
-typedef std::map<std::string,RemoteDevice*> RemoteDevPTable;
-
 /* internal representation of a hci request
 */
 
 struct Request;
-typedef std::list<Request*> Requests;
+typedef std::list< RefPtr<Request> > Requests;
 
 /*
 */
+
+#define TVLESS(a,b) ((a).tv_sec == (b).tv_sec ? \
+		    ((a).tv_usec < (b).tv_usec) : \
+		    ((a).tv_sec < (b).tv_sec))
 
 struct LocalDevice::Private
 {
 	void init();
 	//void open( int dev_id );
 
-	void post_req( Request* );
-	void fire_event( Request* );
+	void post_req( RefPtr<Request>& );
+	void fire_event( RefPtr<Request>& );
 
 	void read_ready( FdNotifier& );
 	void write_ready( FdNotifier& );
@@ -43,17 +44,21 @@ struct LocalDevice::Private
 	void req_timedout( Timeout& );
 	void flush_queues();
 
-	void link_ctl_cmd_complete( Request* req );
+	void link_ctl_cmd_complete( Request& );
 
-	void link_policy_cmd_complete( Request* req );
+	void link_policy_cmd_complete( Request& );
 
-	void host_ctl_cmd_complete( Request* req );
+	void host_ctl_cmd_complete( Request& );
 
-	void info_param_cmd_complete( Request* req );
+	void info_param_cmd_complete( Request& );
 
-	void status_param_cmd_complete( Request* req );
+	void status_param_cmd_complete( Request& );
 
-	void hci_event_received( Request* req );
+	void hci_event_received( Request& );
+
+	void hci_event_inquiry_result( u8 nrsp, inquiry_info* evt );
+	void hci_event_conn_complete( evt_conn_complete* evt );
+	void hci_event_disconn_complete( evt_disconn_complete* evt );
 
 	void clear_cache();
 	void update_cache( RemoteInfo& );
@@ -61,6 +66,7 @@ struct LocalDevice::Private
 
 	/**/
 
+	Private( LocalDevice*, int );
 	~Private();
 
 	/**/
@@ -76,7 +82,11 @@ struct LocalDevice::Private
 	LocalDevice*	parent;
 
 	RemoteDevPTable	inquiry_cache;
-	double		time_last_inquiry;
+	timeval		time_last_inquiry;
+
+	/**/
+
+	void*		data;	//a wrapper can put here whatever he wants
 };
 
 /*
@@ -94,7 +104,7 @@ struct Request
 	iovec iobuf[3];
 	int ion;
 
-	Timeout to;
+	Timeout* to;
 
 	enum
 	{	QUEUED,		

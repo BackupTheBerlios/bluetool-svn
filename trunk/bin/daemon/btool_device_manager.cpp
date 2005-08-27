@@ -48,9 +48,9 @@ DeviceManager::DeviceManager()
 
 	_evt_socket.set_filter(f);
 
-	_notifier.fd(_evt_socket.handle());
-	_notifier.can_read.connect( sigc::mem_fun( this, &DeviceManager::on_new_event ));
-	_notifier.flags(POLLIN);
+	_notifier = FdNotifier::create( _evt_socket.handle() );
+	_notifier->can_read.connect( sigc::mem_fun( this, &DeviceManager::on_new_event ));
+	_notifier->flags(POLLIN);
 
 	/*	find devices
 	*/
@@ -71,10 +71,11 @@ DeviceManager::DeviceManager()
 
 			try
 			{
-				Device* d = new Device(id,addr);
-				_devices[id] = d;
+				RefPtr<Device> rd ( new Device(id,addr) );
 
-				this->DeviceAdded(d->oname().c_str());
+				_devices[id] = rd;
+
+				this->DeviceAdded(rd->oname().c_str());
 			}
 			catch( std::exception& e )
 			{
@@ -86,12 +87,12 @@ DeviceManager::DeviceManager()
 
 DeviceManager::~DeviceManager()
 {
-	DevicePTable::iterator i = _devices.begin();
+	FdNotifier::destroy(_notifier);
+
+	DeviceRTable::iterator i = _devices.begin();
 	while( i != _devices.end() )
 	{
-		Device* d = i->second;
-		DeviceRemoved(d->oname().c_str());
-		delete d;
+		DeviceRemoved(i->second->oname().c_str());
 		_devices.erase(i);
 		++i;
 	}
@@ -103,7 +104,7 @@ void DeviceManager::ListDevices( const DBus::CallMessage& msg )
 	DBus::MessageIter rw = reply.w_iter();
 	DBus::MessageIter sa = rw.new_array(DBUS_TYPE_STRING);
 
-	DevicePTable::iterator i = _devices.begin();
+	DeviceRTable::iterator i = _devices.begin();
 	while( i != _devices.end() )
 	{
 		const char* fullname = i->second->oname().c_str();
@@ -244,10 +245,10 @@ void DeviceManager::DeviceDown( const char* name )
 
 Device* DeviceManager::get_device( int dev_id )
 {
-	DevicePTable::iterator i = _devices.find(dev_id);
+	DeviceRTable::iterator i = _devices.find(dev_id);
 	if( i != _devices.end() )
 	{
-		return i->second;	
+		return &(*i->second);	
 	}
 	return NULL;
 }
@@ -293,10 +294,10 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 				usleep(1000000); //it seems the device doesn't come up immediately sometimes :(
 
 				BdAddr addr = __get_dev_addr(sd->dev_id);
-				Device* d = new Device(sd->dev_id,addr);
-				_devices[sd->dev_id] = d;
+				RefPtr<Device> rd ( new Device(sd->dev_id,addr) );
+				_devices[sd->dev_id] = rd;
 
-				this->DeviceAdded(d->oname().c_str());
+				this->DeviceAdded(rd->oname().c_str());
 			}
 			catch( std::exception& e )
 			{
@@ -309,13 +310,14 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 		{
 			if(!dev) return;
 
-			DevicePTable::iterator i = _devices.find(sd->dev_id);
+			DeviceRTable::iterator i = _devices.find(sd->dev_id);
 
-			Device* d = i->second;
-			this->DeviceRemoved(d->oname().c_str());
+			std::string oldname = i->second->oname().c_str();
 
-			delete d;
 			_devices.erase(i);
+
+			this->DeviceRemoved(oldname.c_str());
+
 			break;
 		}
 		case HCI_DEV_UP:

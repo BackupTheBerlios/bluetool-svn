@@ -39,6 +39,12 @@ bool ErrorMessage::operator == ( const ErrorMessage& m ) const
 	return dbus_message_is_error(_message, m.name());
 }
 
+SignalMessage::SignalMessage( const char* name )
+{
+	_message = dbus_message_new(DBUS_MESSAGE_TYPE_SIGNAL);
+	member(name);
+}
+
 SignalMessage::SignalMessage( const char* path, const char* interface, const char* name )
 {
 	_message = dbus_message_new_signal(path, interface, name);

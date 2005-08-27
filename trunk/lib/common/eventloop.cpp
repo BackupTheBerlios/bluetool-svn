@@ -9,8 +9,8 @@
 #include <sys/poll.h>
 #include <sys/time.h>
 
-FdNotifierPList	g_fdnotifier_plist;
-TimeoutPList	g_timeout_plist;
+FdNotifierRList	g_fdnotifier_rlist;
+TimeoutRList	g_timeout_rlist;
 
 EventLoop::EventLoop()
 :	_looping(false)
@@ -24,14 +24,14 @@ void EventLoop::enter()
 
 	while(_looping)
 	{	
-		int nfd = g_fdnotifier_plist.size();
+		int nfd = g_fdnotifier_rlist.size();
 
 		pollfd fds[ nfd ];
 
 		int a = 0;
-		FdNotifierPList::iterator fit = g_fdnotifier_plist.begin();
+		FdNotifierRList::iterator fit = g_fdnotifier_rlist.begin();
 
-		while( fit != g_fdnotifier_plist.end() )
+		while( fit != g_fdnotifier_rlist.end() )
 		{
 		//	if( (*fit)->fd() > 0 && (*fit)->flags() )
 			{
@@ -48,9 +48,9 @@ void EventLoop::enter()
 		//get nearest timeout
 		int wait = 100;
 /*
-		TimeoutPList::iterator ti = g_timeout_plist.begin();
+		TimeoutRList::iterator ti = g_timeout_rlist.begin();
 
-		while( ti != g_timeout_plist.end() )
+		while( ti != g_timeout_rlist.end() )
 		{
 			if( (*ti)->timeslice() < wait )
 				wait = (*ti)->timeslice();
@@ -71,9 +71,9 @@ void EventLoop::enter()
 //		int time_delta =	((after.tv_sec*1000 + after.tv_usec/1000.0)
 //					- (before.tv_sec*1000 + before.tv_usec/1000.0));
 
-		TimeoutPList::iterator tit = g_timeout_plist.begin();
+		TimeoutRList::iterator tit = g_timeout_rlist.begin();
 		
-		while( tit != g_timeout_plist.end() )
+		while( tit != g_timeout_rlist.end() )
 		{
 			/*int newslice = (*tit)->timeslice() - time_delta;
 			
@@ -87,16 +87,26 @@ void EventLoop::enter()
 			{
 				(*tit)->timeslice( newslice );
 			}*/
-			(*tit)->update();
-			++tit;
+
+			/* if the timeout expired, its owner might decide
+			   to destroy it, thus invalidating the pointer,
+			   that's why we save it beforehand
+			*/
+			TimeoutRList::iterator tit2 = tit;
+			tit2++;
+			if( (*tit)->update() )
+			{
+				(*tit)->timed_out(*(*tit));
+			}
+			tit=tit2;
 		}
 
 		int i = 0;
 		int checked = 0;
 		while( checked < nfd )
 		{
-			FdNotifierPList::iterator fit = g_fdnotifier_plist.begin();
-			while( fit != g_fdnotifier_plist.end() )
+			FdNotifierRList::iterator fit = g_fdnotifier_rlist.begin();
+			while( fit != g_fdnotifier_rlist.end() )
 			{	
 				if( (*fit)->fd() == fds[i].fd )
 				{
@@ -117,16 +127,18 @@ void EventLoop::enter()
 					}
 					catch( std::exception& e )
 					{
-						std::cerr << "Uncaught exception in event loop: " << e.what() << std::endl;
+						_dbg("Uncaught exception in event loop: %s",e.what());
 						//(*fit)->fd(-1);
 					}
-					if( fds[i].revents & POLLERR || fds[i].revents & POLLHUP || fds[i].revents == 32)
+					if( fds[i].revents & POLLERR || fds[i].revents & POLLHUP || fds[i].revents == 32 ) //???
 					{
+						_dbg("fds[%d].revents=%d, removing it..",i,fds[i].revents);
+
 						/* remove it NOW or we enter an infinite loop
 						*/
-						FdNotifierPList::iterator next = fit;
+						FdNotifierRList::iterator next = fit;
 						++next;
-						g_fdnotifier_plist.erase(fit);
+						g_fdnotifier_rlist.erase(fit);
 						fit = next;
 
 						continue;

@@ -13,15 +13,23 @@ namespace DBus
 
 	typedef std::map<std::string, Interface*>	InterfaceTable;
 
+	class Object;
+
+	class CallMessage;
+	class SignalMessage;
+
 	class IfaceTracker : public RefCnt 
 	{
 	protected:
 
 		InterfaceTable	_interfaces;
-	};
 
-	class CallMessage;
-	class SignalMessage;
+		virtual void remit_signal( SignalMessage& )
+		{}
+	
+	public:
+		virtual const Object* object() const = 0 ;
+	};
 
 	typedef sigc::signal<void, const CallMessage&> MethodCallback;
 	typedef sigc::signal<void, const SignalMessage&> SignalCallback;
@@ -37,7 +45,7 @@ namespace DBus
 
 //	this->conn().add_match("member='" #signal "'");
 
-class Interface : protected virtual IfaceTracker
+class Interface : public virtual IfaceTracker
 {
 public:
 	
@@ -85,6 +93,8 @@ public:
 	LocalInterface( const char* name );
 
 	bool invoke_method( const CallMessage& );
+
+	void emit_signal( SignalMessage& );
 
 protected:
 
