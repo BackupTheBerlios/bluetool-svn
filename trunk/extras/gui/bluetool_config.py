@@ -335,7 +335,7 @@ class BluetoolCfgPanel:
 		#
 		#	get settings
 		#
-		name = dev['local_name']
+		name = dev['name']
 		self['bt_devname_txt'].set_text(name)
 
 		clsb = dev['class']
@@ -390,7 +390,7 @@ class BluetoolCfgPanel:
 		#
 		#	load graphical interface
 		#
-		self.widgets = gtk.glade.XML('bluetool-gui.glade', 'bt_cfg_wnd')
+		self.widgets = gtk.glade.XML('bluetool_gui.glade', 'bt_cfg_wnd')
 		handlers = {
 			"on_bt_close"			: self.on_close,
 			"on_bt_cfgsave_tgb_toggled"	: self.on_toggle_autosave,
@@ -416,7 +416,7 @@ class BluetoolCfgPanel:
 		#
 		#	initialize device class panel
 		#
-		self.devclass_widgets = gtk.glade.XML('bluetool-gui.glade', 'bt_devclass_panel')
+		self.devclass_widgets = gtk.glade.XML('bluetool_gui.glade', 'bt_devclass_panel')
 		devclass_handlers = {
 			"on_bt_devclass_update"		: self.on_update_devclass,
 			"on_bt_devclass_change"		: self.on_change_devclass,
@@ -533,7 +533,7 @@ class BluetoolCfgPanel:
 
 	def on_device_added(self,dev):
 		addr = dev['address']
-		name = dev['local_name']
+		name = dev['name']
 		self.dev_liststore.append([dev.path, addr, name+"\t("+addr+")",False,False]);
 
 	def on_device_removed(self,dev):
