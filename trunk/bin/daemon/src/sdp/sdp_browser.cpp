@@ -1,4 +1,3 @@
-#include <bluetool/linux/sdprecord_p.h>
 #include <bluetool/sdpdebug.h>
 #include <errno.h>
 
