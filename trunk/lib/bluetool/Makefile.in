@@ -155,7 +155,7 @@ CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(libbluetool_a_SOURCES)
 DIST_COMMON = README $(srcdir)/Makefile.in AUTHORS COPYING ChangeLog \
-	INSTALL Makefile.am NEWS configure configure.in
+	INSTALL Makefile.am NEWS configure.in
 SOURCES = $(libbluetool_a_SOURCES)
 
 all: all-am
