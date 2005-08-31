@@ -13,6 +13,8 @@ public:
 
 	BdAddr( const u8* );
 
+	BdAddr( const char* str );
+
 	void set( const char* str );
 
 	bool operator == ( const BdAddr& ba ) const;

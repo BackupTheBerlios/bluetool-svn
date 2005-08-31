@@ -30,15 +30,27 @@ LocalDevices LocalDevice::enumerate()
 /*	device control
 */
 
-void LocalDevice::up()
+void LocalDevice::up( int id )
 {
 	hci_dbg_enter();
 
-	ulong i = id();
+	//ulong i = id();
 
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVUP, i) < 0 && errno != EALREADY )
+	if( ioctl(sock.handle(), HCIDEVUP, id) < 0 && errno != EALREADY )
 		throw Exception();
+
+	/*	don't return until we get an address,
+		we can't create the device without one
+
+		TODO ?
+	*/
+	unsigned char none[6] = {0};
+	bdaddr_t addr;
+	do
+	{
+		hci_devba(id, &addr);
+	}while( memcmp(addr.b, none, 6) == 0 );
 
 	hci_dbg_leave();
 }
@@ -47,31 +59,18 @@ void LocalDevice::on_up()
 {
 	hci_dbg_enter();
 
-	/*hci_dev_info di;
-	do
-	{
-		if(hci_devinfo(id(), &di) < 0)
-			throw Exception();
-	}
-	while(!hci_test_bit(HCI_UP, &di.flags));*/
-	//no, I don't like this, but I'm in a fucking hurry
-
-	usleep(1000000);
-
-	pvt->dd.renew(); // creates a new control socket
+	pvt->dd.renew(); //since the old control connection socket has become invalid
 	pvt->init();
 
 	hci_dbg_leave();
 }
 
-void LocalDevice::down()
+void LocalDevice::down( int id )
 {
 	hci_dbg_enter();
 
-	ulong i = id();
-
 	Socket sock;
-	if( ioctl(sock.handle(), HCIDEVDOWN, i) < 0 )
+	if( ioctl(sock.handle(), HCIDEVDOWN, id) < 0 )
 		throw Exception();
 
 	hci_dbg_leave();
@@ -81,20 +80,30 @@ void LocalDevice::on_down()
 {
 	hci_dbg_enter();
 
+	pvt->dd.close();
+
 	FdNotifier::destroy(pvt->notifier);
 	pvt->notifier = NULL;
-
-	pvt->dd.close();
 
 	pvt->flush_queues();
 
 	hci_dbg_leave();
 }
 
-void LocalDevice::reset()
+void LocalDevice::reset( int id )
 {
-	up();
-	down();
+	up(id);
+	down(id);
+}
+
+bool LocalDevice::is_up( int id )
+{
+	hci_dev_info di;
+
+	if(hci_devinfo(id, &di) < 0)
+		throw Exception();
+
+	return hci_test_bit(HCI_UP, &di.flags);
 }
 
 /*
@@ -158,10 +167,9 @@ void LocalDevice::Private::init()
 {
 	hci_dbg_enter();
 
-	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)&ba) < 0 )
+	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)ba.ptr()) < 0 )
 		throw Exception();
 
-	//delete notifier; //not needed, on_down frees it already
 	notifier = FdNotifier::create(dd.handle(), POLLIN);
 	notifier->can_read.connect(sigc::mem_fun( this, &LocalDevice::Private::read_ready ));
 	notifier->can_write.connect(sigc::mem_fun( this, &LocalDevice::Private::write_ready ));
@@ -448,6 +456,44 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	}
 	len -= (1 + HCI_EVENT_HDR_SIZE);
 
+	/* special events which are caught even if there's no
+	   associated request 
+	*/
+	switch (hp->eh.evt) {
+
+		case EVT_CMD_STATUS:
+		{
+			/* we shouldn't deal with particular events here, but
+			   there are some exceptions :(
+			*/
+			if( hp->evt.cs.opcode == cmd_opcode_pack(OGF_LINK_CTL,OCF_INQUIRY) 
+				&& !hp->evt.cs.status )
+			{
+				gettimeofday(&time_last_inquiry, NULL);
+			}
+			break;
+		}
+
+		case EVT_INQUIRY_RESULT:
+		{
+			u8* nrsp = (u8*)&(hp->evt.ptr);
+			inquiry_info* ii = (inquiry_info*)(nrsp+1);
+	
+			hci_event_inquiry_result(*nrsp, ii);
+			break;
+		}
+		case EVT_CONN_COMPLETE:
+		{
+			hci_event_conn_complete((evt_conn_complete*)&(hp->evt.ptr));
+			break;
+		}
+		case EVT_DISCONN_COMPLETE:
+		{
+			hci_event_disconn_complete((evt_disconn_complete*)&(hp->evt.ptr));
+			break;
+		}
+	}
+
 	Requests::reverse_iterator ri = waitq.rbegin();
 	
 	RefPtr<Request>pr;
@@ -461,15 +507,6 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 
 			case EVT_CMD_STATUS:
 			{
-				/* we shouldn't deal with particular events here, but
-				   there are some exceptions :(
-				*/
-				if( hp->evt.cs.opcode == cmd_opcode_pack(OGF_LINK_CTL,OCF_INQUIRY) 
-					&& !hp->evt.cs.status )
-				{
-					gettimeofday(&time_last_inquiry, NULL);
-				}
-
 				if (hp->evt.cs.opcode != pr->ch.opcode)
 					break;
 
@@ -496,27 +533,6 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 				pr->hr.rparam = malloc(pr->hr.rlen);
 				memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
 				goto _fire;
-			}
-			/* special events which are caught even if there's no
-			   associated request 
-			*/
-			case EVT_INQUIRY_RESULT:
-			{
-				u8* nrsp = (u8*)&(hp->evt.ptr);
-				inquiry_info* ii = (inquiry_info*)(nrsp+1);
-
-				hci_event_inquiry_result(*nrsp, ii);
-				break;
-			}
-			case EVT_CONN_COMPLETE:
-			{
-				hci_event_conn_complete((evt_conn_complete*)&(hp->evt.ptr));
-				break;
-			}
-			case EVT_DISCONN_COMPLETE:
-			{
-				hci_event_disconn_complete((evt_disconn_complete*)&(hp->evt.ptr));
-				break;
 			}
 			default:
 			{
@@ -648,9 +664,6 @@ void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 
 	Filter of;
 
-	//req->dest_type = Request::LOCAL; //this is the default
-	//req->dest.loc = parent;
-
 	int error = 0;
 
 	if(req->status == Request::TIMEDOUT)
@@ -701,9 +714,6 @@ void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 			}
 
 			error = bt_error(cs->status);
-
-			//parent->on_status_failed(status, req->cookie);
-			//goto after;
 			break;
 		}
 		/*	command-specific events
@@ -725,21 +735,6 @@ void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 
 	dd.set_filter(of);
 
-/*	switch( req->dest_type )
-	{
-		case Request::LOCAL:
-		req->dest.loc->on_after_event(req->cookie);
-		break;
-
-		case Request::REMOTE:
-		req->dest.rem->on_after_event(req->cookie);
-		break;
-
-		case Request::CONNECTION:
-		//req->dest.con->on_after_event(req->cookie);
-		break;
-	}
-*/
 	parent->on_after_event(error,req->cookie);
 	waitq.erase( req->iter );
 
@@ -1078,15 +1073,19 @@ void LocalDevice::Private::hci_event_disconn_complete( evt_disconn_complete* evt
 LocalDevice::LocalDevice( const char* dev_name )
 :	pvt( new Private(this, hci_devid(dev_name)) )
 {
-	up();
-	pvt->init();
+	if(is_up(id())) 
+		pvt->init();
+	else
+		LocalDevice::up( id() );
 }
 
 LocalDevice::LocalDevice( int dev_id )
 :	pvt( new Private(this, dev_id) )
 {
-	up();
-	pvt->init();
+	if(is_up(id())) 
+		pvt->init();
+	else
+		LocalDevice::up( id() );
 }
 
 LocalDevice::~LocalDevice()
@@ -1115,6 +1114,8 @@ int LocalDevice::id() const
 
 const BdAddr& LocalDevice::addr() const
 {
+	hci_devba(id(), (bdaddr_t*)pvt->ba.ptr());
+
 	return pvt->ba;
 }
 

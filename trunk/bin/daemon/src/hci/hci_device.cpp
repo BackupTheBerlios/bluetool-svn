@@ -48,7 +48,7 @@ void HciDevice::Up( const DBus::CallMessage& msg )
 {
 	try
 	{
-		Hci::LocalDevice::up();
+		Hci::LocalDevice::up(id());
 
 		u16 status = 0;
 		DBus::ReturnMessage reply(msg);
@@ -69,7 +69,7 @@ void HciDevice::Down( const DBus::CallMessage& msg )
 {
 	try
 	{
-		Hci::LocalDevice::down();
+		Hci::LocalDevice::down(id());
 
 		u16 status;
 
@@ -225,9 +225,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 		(
 			&status,&rx_bytes,&rx_errors,&tx_bytes,&rx_errors
 		);
-		u16 err = 0;
-		reply->append( DBUS_TYPE_UINT16, &err,
-			       DBUS_TYPE_BOOLEAN, &status,
+		reply->append( DBUS_TYPE_BOOLEAN, &status,
 			       DBUS_TYPE_INT32, &rx_bytes,
 			       DBUS_TYPE_INT32, &rx_errors,
 			       DBUS_TYPE_INT32, &tx_bytes,
@@ -777,12 +775,12 @@ void HciDevice::on_after_event( int error, void* cookie )
 
 		DBus::ErrorMessage emsg;
 		emsg.name(BTOOL_ERROR_HCI);
-//		emsg.append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
+		emsg.append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
 		emsg.reply_serial(reply->reply_serial());
+		emsg.destination(reply->destination());
+		emsg.sender(reply->sender());
 
 		_bus.send(emsg);
-		reply->append(DBUS_TYPE_STRING, &strerr, DBUS_TYPE_INVALID);
-		_bus.send(*reply);
 	}
 	else
 	{

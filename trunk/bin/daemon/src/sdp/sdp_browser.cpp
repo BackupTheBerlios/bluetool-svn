@@ -16,8 +16,9 @@ SdpBrowser::SdpBrowser( const BdAddr& from, const BdAddr& to )
 	register_method( SdpBrowser, SearchAttributes );
 	register_method( SdpBrowser, SearchServAttrs );
 	register_method( SdpBrowser, SearchAllRecords );
+	register_method( SdpBrowser, SearchAllRecordsCached );
 
-	this->on_response.connect( sigc::mem_fun( this, &SdpBrowser::on_read_response ));
+	//this->on_response.connect( sigc::mem_fun( this, &SdpBrowser::on_read_response ));
 }
 
 SdpBrowser::~SdpBrowser()
@@ -75,6 +76,20 @@ void SdpBrowser::SearchAllRecords( const DBus::CallMessage& msg )
 	Sdp::Client::start_complete_search();
 }
 
+void SdpBrowser::SearchAllRecordsCached( const DBus::CallMessage& msg )
+{
+	if(_reply)
+	{
+		DBus::ErrorMessage e (msg, BTOOL_ERROR, strerror(EBUSY));
+		_bus.send(e);
+		return;
+	}
+
+	_reply = new DBus::ReturnMessage(msg);
+
+	Sdp::Client::cached_complete_search();
+}
+
 void SdpBrowser::on_read_response( u16 status, const Sdp::RecordList& data )
 {
 	DBus::MessageIter rw = _reply->w_iter();
@@ -86,19 +101,6 @@ void SdpBrowser::on_read_response( u16 status, const Sdp::RecordList& data )
 	Sdp::RecordList::const_iterator rit = data.begin();
 	while( rit != data.end() )
 	{
-
-		SdpRecordPTable::iterator rip = _records.find(rit->handle());
-
-		if( rip == _records.end() )
-		{
-			_records[rit->handle()] = new SdpRecord(object()->oname().c_str(), *rit);
-		}
-		else
-		{
-			delete rip->second;
-			rip->second = new SdpRecord(object()->oname().c_str(), *rit);
-		}
-
 		sa.append_string( _records[rit->handle()]->oname().c_str() );
 
 		++rit;
@@ -110,6 +112,44 @@ void SdpBrowser::on_read_response( u16 status, const Sdp::RecordList& data )
 	_bus.send(*_reply);
 	delete _reply;
 	_reply = NULL;
+}
+
+
+void SdpBrowser::on_new_cache_entry( Sdp::Record& rec )
+{
+	sdp_dbg_enter();
+
+	/*	the record list owns a reference to the record now
+	*/
+	SdpRecordPTable::iterator rip = _records.find(rec.handle());
+
+	if( rip == _records.end() )
+	{
+		_records[rec.handle()] = new SdpRecord(object()->oname().c_str(), rec);
+	}
+	else
+	{
+		delete rip->second;
+		rip->second = new SdpRecord(object()->oname().c_str(), rec);
+	}
+	sdp_dbg_leave();
+}
+
+void SdpBrowser::on_purge_cache_entry( Sdp::Record& rec )
+{
+	sdp_dbg_enter();
+
+	/*	we allocated a dbus object and acquired 	
+		a reference to the record before, now release both
+	*/
+	SdpRecordPTable::iterator rip = _records.find(rec.handle());
+
+	if( rip != _records.end() )
+	{
+		delete rip->second;
+		_records.erase(rip);
+	}
+	sdp_dbg_leave();
 }
 
 }//namespace Bluetool

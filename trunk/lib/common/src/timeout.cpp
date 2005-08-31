@@ -21,7 +21,7 @@ void Timeout::destroy( Timeout* t )
 
 	while( i != g_timeout_rlist.end() )
 	{
-		if( &(*(*i)) == t )
+		if( i->get() == t )
 		{
 			TimeoutRList::iterator n = i;
 			n++;

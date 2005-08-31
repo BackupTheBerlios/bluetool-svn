@@ -25,6 +25,9 @@ struct DataElement::Private
 	bool is_bool();
 	bool is_string();
 	bool is_uuid();
+	bool is_u8();
+	bool is_u16();
+	bool is_u32();
 
 	void fill( sdp_data_t* );
 };

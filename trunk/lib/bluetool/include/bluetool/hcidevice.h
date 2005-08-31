@@ -39,9 +39,11 @@ public:
 
 	/*	device control
 	*/	
-	void up();
-	void down();
-	void reset();
+	static void up( int );
+	static void down( int );
+	static void reset( int );
+
+	static bool is_up( int );
 
 	void on_up();
 	void on_down();

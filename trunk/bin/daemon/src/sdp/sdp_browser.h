@@ -37,8 +37,14 @@ public:
 
 	void SearchAllRecords( const DBus::CallMessage& );
 
+	void SearchAllRecordsCached( const DBus::CallMessage& );
+
 private:
 	void on_read_response( u16 status, const Sdp::RecordList& data );
+
+	void on_new_cache_entry( Sdp::Record& rec );
+
+	void on_purge_cache_entry( Sdp::Record& rec );
 
 private:
 	DBus::Connection _bus;

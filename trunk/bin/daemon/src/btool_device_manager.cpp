@@ -67,11 +67,10 @@ DeviceManager::DeviceManager()
 		for( int i = 0; i < list_req.ndevs; ++i )
 		{
 			int id = list_req.devs[i].dev_id;
-			BdAddr addr = __get_dev_addr(id);
 
 			try
 			{
-				RefPtr<Device> rd ( new Device(id,addr) );
+				RefPtr<Device> rd ( new Device(id) );
 
 				_devices[id] = rd;
 
@@ -79,7 +78,7 @@ DeviceManager::DeviceManager()
 			}
 			catch( std::exception& e )
 			{
-				std::cerr << "Unable to create device #" << id << ": " << e.what() << std::endl;
+				blue_dbg("Unable to create device #%d: %s",id,e.what());
 			}
 		}
 	}
@@ -287,21 +286,18 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 		{
 			if(dev) return;
 
-			//Hci::LocalDevice::up(sd->dev_id);
-
 			try
 			{
-				usleep(1000000); //it seems the device doesn't come up immediately sometimes :(
+				//usleep(1000000); //it seems the device doesn't come up immediately sometimes :(
 
-				BdAddr addr = __get_dev_addr(sd->dev_id);
-				RefPtr<Device> rd ( new Device(sd->dev_id,addr) );
+				RefPtr<Device> rd ( new Device(sd->dev_id) );
 				_devices[sd->dev_id] = rd;
 
 				this->DeviceAdded(rd->oname().c_str());
 			}
 			catch( std::exception& e )
 			{
-				std::cerr << "Unable to create device #" << sd->dev_id << ": " << e.what() << std::endl;
+				blue_dbg("Unable to create device #%d: %s",sd->dev_id,e.what());
 			}
 
 			break;
@@ -332,7 +328,7 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 			}
 			catch( std::exception& e )
 			{
-				std::cerr << "Unable to initialize device #" << sd->dev_id << ": " << e.what() << std::endl;
+				blue_dbg("Unable to initialize device #%d: %s",sd->dev_id,e.what());
 			}
 
 			break;

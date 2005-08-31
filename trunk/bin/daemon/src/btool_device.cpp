@@ -36,12 +36,12 @@ static const char* _gen_conn_name( const RemoteDevice* endpoint, u16 handle )
 	return __buf;
 }
 
-Device::Device( int dev_id, const BdAddr& dev_addr ) //TODO: only the second parameter should be here
+Device::Device( int dev_id )
 :
 	HciDevice(dev_id),
-	DBus::LocalObject(_gen_oname(dev_addr), DBus::Connection::SystemBus()),
+	DBus::LocalObject(_gen_oname(HciDevice::addr()), DBus::Connection::SystemBus()),
 
-	_services(_get_devpath(dev_addr), dev_addr)
+	_services(_get_devpath(HciDevice::addr()), HciDevice::addr())
 {}
 
 Device::~Device()

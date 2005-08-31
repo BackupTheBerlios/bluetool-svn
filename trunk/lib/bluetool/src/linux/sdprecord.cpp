@@ -71,6 +71,22 @@ bool DataElement::Private::is_uuid()
 			return false;
 	}
 }
+
+bool DataElement::Private::is_u8()
+{
+	return elem->dtd == SDP_UINT8;
+}
+
+bool DataElement::Private::is_u16()
+{
+	return elem->dtd == SDP_UINT16;
+}
+
+bool DataElement::Private::is_u32()
+{
+	return elem->dtd == SDP_UINT32;
+}
+
 #if 0
 sdp_data_t* DataElement::Private::new_seq( DataElementSeq& des )
 {
@@ -113,7 +129,6 @@ void DataElement::Private::fill( sdp_data_t* raw )
 
 			list.push_back(de);
 		}
-		sdp_dbg("-------->list len=%d",list.size());
 	}
 	if( is_uuid() )
 	{
@@ -154,6 +169,47 @@ bool DataElement::is_uuid()
 {
 	return pvt->is_uuid();
 }
+
+bool DataElement::is_u8()
+{
+	return pvt->is_u8();
+}
+
+bool DataElement::is_u16()
+{
+	return pvt->is_u16();
+}
+
+bool DataElement::is_u32()
+{
+	return pvt->is_u32();
+}
+
+
+
+bool DataElement::match( UUID& pattern_element )
+{
+	if(is_uuid())
+	{
+		UUID& u = *this;
+
+		return u == pattern_element;
+	}
+	else if(is_seq())
+	{
+		DataElementSeq& s = *this;
+
+		DataElementList::iterator i = s.begin();
+		while( i != s.end() )
+		{
+			if( !i->match(pattern_element) )
+				return false;
+			++i;
+		}
+	}
+	else return true;
+}
+
 /*
 DataElement::DataElement( const DataElement& de )
 : 	pvt(new Private)
@@ -198,15 +254,23 @@ DataElement::operator DataElementSeq&()
 
 DataElement::operator Bool&()
 {
-	if( pvt->elem->dtd != SDP_BOOL )
+	if( !is_bool() )
 		throw Error("type mismatch");
 
 	return static_cast<Bool&>(*this);
 }
 
+DataElement::operator U8&()
+{
+	if( !is_u8() )
+		throw Error("type mismatch");
+
+	return static_cast<U16&>(*this);
+}
+
 DataElement::operator U16&()
 {
-	if( pvt->elem->dtd != SDP_UINT16 )
+	if( !is_u16() )
 		throw Error("type mismatch");
 
 	return static_cast<U16&>(*this);
@@ -214,7 +278,7 @@ DataElement::operator U16&()
 
 DataElement::operator U32&()
 {
-	if( pvt->elem->dtd != SDP_UINT32 )
+	if( !is_u32() )
 		throw Error("type mismatch");
 
 	return static_cast<U32&>(*this);
@@ -331,6 +395,21 @@ void Bool::operator = ( bool b )
 /*	various format integers
 */
 
+U8::U8( u8 u )
+{
+	pvt->alloc = true;
+	pvt->elem = sdp_data_alloc(SDP_UINT8, &u);
+}
+
+u8 U8::to_u8()
+{
+	return pvt->elem->val.uint8;
+}
+
+void U8::operator = ( u8 u )
+{
+	pvt->elem->val.uint8 = u;
+}
 
 U16::U16( u16 u )
 {
@@ -415,17 +494,27 @@ UUID::UUID( u128 value )
 	pvt->alloc = true;
 	pvt->elem = sdp_data_alloc(SDP_UUID128,&value);
 
-	sdp_uuid128_create( &(pvt->elem->val.uuid), value);
+	sdp_uuid128_create( &(pvt->elem->val.uuid), value); 
+
+	//todo: that's wrong, it doesn't write a buffer, but return a dinamically allocated uuid
 }
 
 bool UUID::operator == ( const UUID& u )
 {
-	return sdp_uuid128_cmp( &(pvt->elem->val.uuid), &(u.pvt->elem->val.uuid) ); //TODO: compare types
+	uuid_t* a = sdp_uuid_to_uuid128(&(pvt->elem->val.uuid));
+	uuid_t* b = sdp_uuid_to_uuid128(&(u.pvt->elem->val.uuid));
+
+	int res = sdp_uuid128_cmp(a,b);
+
+	free(a);
+	free(b);
+
+	return res != 0;
 }
 
 const char* UUID::to_string()
 {
-	static char buf[64] = {0};
+	static char buf[32] = {0};
 
 	if( sdp_uuid2strn(&(pvt->elem->val.uuid), buf, sizeof(buf)) < 0 )
 		throw Error("invalid UUID");
@@ -563,6 +652,24 @@ void Record::remove( u16 id )
 {
 	throw "Unimpl";
 	//sdp_attr_remove(pvt->rec, id);
+}
+
+bool Record::match( DataElementSeq& pattern )
+{
+	AttributeList::iterator ait = pvt->attrs.begin();
+	while( ait != pvt->attrs.end() )
+	{
+		DataElementList::iterator dit = pattern.begin();
+		while( dit != pattern.end() )
+		{
+			UUID& u = *dit;
+			if(! ait->elem().match(u) )
+				return false;
+			++dit;
+		}
+		++ait;
+	}
+	return true;
 }
 
 String& Record::get_service_name() const

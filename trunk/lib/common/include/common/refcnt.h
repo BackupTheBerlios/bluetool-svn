@@ -48,7 +48,7 @@ public:
 private:
 	void ref() const
 	{
-		++ (*__ref);	_dbg("%p+)%d",__ref,*__ref);
+		++ (*__ref);	//_dbg("%p+)%d",__ref,*__ref);
 	}
 	void unref() const
 	{
@@ -59,7 +59,7 @@ private:
 			_dbg("refcount dropped below zero!!!!"); //should throw stg here
 		}
 
-		_dbg("%p-)%d",__ref,*__ref);
+		//_dbg("%p-)%d",__ref,*__ref);
 
 		if( noref() )
 		{

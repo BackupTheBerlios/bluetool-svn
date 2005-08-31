@@ -61,9 +61,9 @@ void EventLoop::enter()
 //		timeval before;
 //		gettimeofday(&before, NULL);
 
-		nfd = poll(fds, nfd, wait);
+		int returned = poll(fds, nfd, wait);
 
-		if( nfd > 0 ){_dbg("%d descriptor%sready",nfd, nfd>1?"s ":" ");}
+		if( returned > 0 ){_dbg("%d descriptor%sready",returned, returned>1?"s ":" ");}
 		
 //		timeval after;
 //		gettimeofday(&after, NULL);
@@ -96,14 +96,14 @@ void EventLoop::enter()
 			tit2++;
 			if( (*tit)->update() )
 			{
-				(*tit)->timed_out(*(*tit));
+				(*tit)->timed_out(*(tit->get()));
 			}
 			tit=tit2;
 		}
 
 		int i = 0;
 		int checked = 0;
-		while( checked < nfd )
+		while( i < nfd )
 		{
 			FdNotifierRList::iterator fit = g_fdnotifier_rlist.begin();
 			while( fit != g_fdnotifier_rlist.end() )
@@ -117,37 +117,40 @@ void EventLoop::enter()
 
 						if( fds[i].revents & POLLIN )
 						{
-							(*fit)->can_read( *(*fit) );
+							(*fit)->can_read( *(fit->get()) );
 						}
 						if( fds[i].revents & POLLOUT )
 						{
-							(*fit)->can_write( *(*fit) );
+							(*fit)->can_write( *(fit->get()) );
 						}
 
 					}
 					catch( std::exception& e )
 					{
-						_dbg("Uncaught exception in event loop: %s",e.what());
+						_dbg("Uncaught exception in event loop: %s", e.what());
 						//(*fit)->fd(-1);
 					}
-					if( fds[i].revents & POLLERR || fds[i].revents & POLLHUP || fds[i].revents == 32 ) //???
+					if( fds[i].revents & POLLERR || fds[i].revents & POLLHUP || fds[i].revents == 32 ) // ?!?!?!?!?
 					{
-						_dbg("fds[%d].revents=%d, removing it..",i,fds[i].revents);
-
 						/* remove it NOW or we enter an infinite loop
 						*/
+						_dbg("fds[%d].revents = %d, removing..",i,fds[i].revents);
+
 						FdNotifierRList::iterator next = fit;
 						++next;
-						g_fdnotifier_rlist.erase(fit);
+						FdNotifier::destroy(fit->get());
 						fit = next;
 
+						++checked;
+						//++i;
 						continue;
 					}
 					++checked;
-					++i;
+					//++i;
 				}
 				++fit;
 			}
+			++i;
 		}
 	}
 	_dbg("leaving loop");

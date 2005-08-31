@@ -18,6 +18,7 @@ namespace Sdp
 	typedef std::list<DataElementSeq> DataElementSeqList;
 
 	class Bool;
+	class U8;
 	class U16;
 	class U32;
 	class String;
@@ -50,11 +51,17 @@ public:
 	bool is_bool();
 	bool is_string();
 	bool is_uuid();
+	bool is_u8();
+	bool is_u16();
+	bool is_u32();
+
+	bool match( UUID& pattern_element );
 
 	operator DataElement&();	//needed by subclasses
 
 	operator DataElementSeq&();
 	operator Bool&();
+	operator U8&();
 	operator U16&();
 	operator U32&();
 	operator String&();
@@ -124,6 +131,17 @@ public:
 	void operator = ( bool b );
 };
 
+/*	I just might use templates for that...
+*/
+class U8 : public DataElement
+{
+public:
+	U8( u8 );
+
+	u8 to_u8();
+
+	void operator = ( u8 u );
+};
 
 class U16 : public DataElement
 {
@@ -188,6 +206,8 @@ public:
 	void add( Attribute& );
 
 	void remove( u16 attr_id );
+
+	bool match( DataElementSeq& pattern );	//pattern is a UUID sequence
 
 	String& get_service_name() const;
 

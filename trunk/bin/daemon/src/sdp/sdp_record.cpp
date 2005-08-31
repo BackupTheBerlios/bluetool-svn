@@ -277,8 +277,16 @@ void SdpRecord::GetProtocolDescList( const DBus::CallMessage& msg )
 
 			if( dit != descriptor.end() )
 			{
-				Sdp::U16& proto_prt = *dit;
-				pit.append_uint16(proto_prt.to_u16());
+				Sdp::DataElement& proto_prt = *dit;
+
+				if( proto_prt.is_u16() )
+				{
+					pit.append_uint16( ((Sdp::U16&)proto_prt).to_u16() );
+				}
+				else if( proto_prt.is_u8() )
+				{
+					pit.append_uint16( ((Sdp::U8&)proto_prt).to_u8() );
+				}
 			}
 			else
 			{

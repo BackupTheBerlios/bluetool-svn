@@ -7,9 +7,22 @@ BdAddr::BdAddr()
 	memset(_baddr,0,6);
 }
 
+BdAddr::BdAddr( const char* addr )
+{
+	bdaddr_t a;
+	str2ba(addr,&a);
+
+	memcpy(_baddr, a.b, 6);
+}
+
 BdAddr::BdAddr( const u8* data )
 {
 	memcpy(_baddr,data,6);
+}
+
+bool BdAddr::operator == ( const BdAddr& a ) const
+{
+	return memcmp(_baddr, a._baddr, 6) == 0;
 }
 
 const std::string BdAddr::to_string() const

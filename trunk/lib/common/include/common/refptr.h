@@ -40,13 +40,18 @@ public:
 
 	T& operator *() const
 	{
-		if(__cnt.noref()) return NULL;
-		
 		return *__ptr;
 	}
 
 
 	T* operator ->() const
+	{
+		if(__cnt.noref()) return NULL;
+		
+		return __ptr;
+	}
+
+	T* get() const
 	{
 		if(__cnt.noref()) return NULL;
 		

@@ -26,7 +26,7 @@ namespace Bluetool
 class Device : public HciDevice, public DBus::LocalObject
 {
 public:
-	Device( int dev_id, const BdAddr& );
+	Device( int dev_id );
 	~Device();
 
 	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );

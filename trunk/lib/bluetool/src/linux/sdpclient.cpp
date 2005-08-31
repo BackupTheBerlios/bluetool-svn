@@ -37,7 +37,11 @@ struct Client::Private
 	//ByteVector tbuf;	//for partial answers
 	sdp_pdu_hdr_t* rsp;
 
-	RecordList records;
+	RecordList returned_records;
+	RecordList cached_records;
+
+	DataElementSeq service_pattern;
+	DataElementSeq attribute_pattern;
 
 	/* write buffer
 	*/
@@ -70,6 +74,7 @@ struct Client::Private
 	int save_and_cstate( char* read_buf, int read_len );	//save partial response
 	void try_connect( Timeout& );
 	void response_complete();
+	void update_cache();
 
 	Private( Client* s )
 	:	notifier(NULL)
@@ -89,7 +94,9 @@ void Client::Private::start_send()
 	/* init session state
 	*/
 	ibuf.clear();
-	records.clear();
+	returned_records.clear();
+	//service_pattern.clear();
+	//attribute_pattern.clear();
 
 	Timeout* t = Timeout::create(1000);
 	t->timed_out.connect( sigc::mem_fun(this, &Client::Private::try_connect) );
@@ -133,7 +140,7 @@ void Client::Private::try_connect( Timeout& tick )
 			}
 			else
 			{
-				sess->on_response(errno,records);
+				sess->on_read_response(errno,returned_records);
 				goto acl_failed;
 			}
 		}
@@ -228,7 +235,7 @@ void Client::Private::response_complete()
 				p->rec = sdp_record_alloc();
 				p->rec->handle = handle;
 
-				records.push_back(Record(p));
+				returned_records.push_back(Record(p));
 
 				pdata += sizeof(u32);
 			}
@@ -249,13 +256,24 @@ void Client::Private::response_complete()
 			{
 				int bread = 0;
 
+				sdp_record_t* rec = sdp_extract_pdu((char*)pdata,&bread);
+
+				if(!rec->attrlist)
+				{
+					// the specification says records cannot be empty,
+					// so we discard records without attributes
+					// (btw the servers shouldn't send this stuff at all)
+					sdp_record_free(rec);
+					break;
+				}
+
 				Record::Private* p = new Record::Private();
 				p->alloc = true;
-				p->rec = sdp_extract_pdu((char*)pdata,&bread);
+				p->rec = rec;
 
 				if(!p->rec) throw Error("invalid pdu in answer"); //mhh, this leaks
 
-				records.push_back(Record(p));
+				returned_records.push_back(Record(p));
 
 				xtracted += bread;
 				pdata += bread;
@@ -265,9 +283,101 @@ void Client::Private::response_complete()
 			break;
 		}
 	}
-	sess->on_response(0,records);
+	/*	now, put the new stuff into the cache
+		and remove invalid records
+		we do that before sending the response because the
+		wrapper might actually expect the fresh data
+		to be in the cache already
+	*/
+	update_cache();
+
+	sess->on_read_response(0,returned_records);
+
+	returned_records.clear();
 
 	sdp_dbg_leave();
+}
+
+void Client::Private::update_cache()
+{
+	/*	1: remove obsolete records
+	*/
+	RecordList::iterator rit;
+	RecordList::iterator cit;
+
+	//	for each 'old' record
+	cit = cached_records.begin();
+	while( cit != cached_records.end() )
+	{
+
+		rit = returned_records.begin();
+		while( rit != returned_records.end() )
+		{
+			if( cit->handle() == rit->handle() )
+				break;
+			++rit;
+		}
+
+	//	if it's NOT among the returned ones
+		if( rit == returned_records.end() )
+		{
+		//	while its attribute IDs say it should be
+			if( cit->match(service_pattern) )
+			{
+			//	assume the record was canceled, and remove it
+				RecordList::iterator nit = cit;
+				nit++;
+
+				// tell upper levels to free any associated resources
+				sess->on_purge_cache_entry(*cit);
+
+				cached_records.erase(cit);
+				cit = nit;
+
+				continue;
+			}
+		}
+		++cit;
+	}
+
+
+	/*	2: insert the new data
+	*/
+
+	//	for each new record
+	rit = returned_records.begin();
+	while( rit != returned_records.end() )
+	{
+		cit = cached_records.begin();
+		while( cit != cached_records.end() )
+		{
+			if( rit->handle() == cit->handle() )
+				break;
+			++cit;
+		}
+
+	//	if we already have a copy...
+		if( cit != cached_records.end() )
+		{
+		//	...update that one
+			sess->on_purge_cache_entry(*cit);
+			
+			cached_records.erase(cit);
+
+			cached_records.push_back(*rit);
+
+			sess->on_new_cache_entry(*rit);
+		}
+		else
+		{
+		//	...else push the new record
+			cached_records.push_back(*rit);
+
+			// notify upper layer
+			sess->on_new_cache_entry(*rit);
+		}
+		++rit;
+	}
 }
 
 void Client::Private::can_read( FdNotifier& )
@@ -332,7 +442,7 @@ void Client::Private::can_read( FdNotifier& )
 		}
 r_disconn:	case DISCONNECTED:
 		{
-			sess->on_response(ECONNABORTED, records);
+			sess->on_read_response(ECONNABORTED, returned_records);
 			break;
 		}
 		default:
@@ -344,7 +454,7 @@ r_disconn:	case DISCONNECTED:
 sdp_error:
 
 	u16 error = ntohs(*(u16*)(rbuf+sizeof(sdp_pdu_hdr_t)));
-	sess->on_response(error, records);
+	sess->on_read_response(error, returned_records);
 
 	sdp_dbg_leave();
 }
@@ -459,6 +569,7 @@ void Client::start_service_search( DataElementSeq& service_pattern )
 
 	/* start request
 	*/
+	pvt->service_pattern.pvt->list.swap(service_pattern.pvt->list);
 	pvt->start_send();
 
 	sdp_dbg_leave();
@@ -499,6 +610,7 @@ void Client::start_attribute_search( u32 service_handle, DataElementSeq& attribu
 	pvt->req = (sdp_pdu_hdr_t*)pbuf->data;
 	pvt->req->pdu_id = SDP_SVC_ATTR_REQ;
 
+	//pvt->attribute_pattern = attributes;
 	pvt->start_send();
 
 	//free(attr_list);
@@ -543,10 +655,9 @@ void Client::start_attr_serv_search( DataElementSeq& service_pattern, DataElemen
 	pvt->req = (sdp_pdu_hdr_t*)pbuf->data;
 	pvt->req->pdu_id = SDP_SVC_SEARCH_ATTR_REQ;
 
-	pvt->start_send();
+	pvt->service_pattern.pvt->list.swap(service_pattern.pvt->list);
 
-//	free(svc_list);
-//	free(attr_list);
+	pvt->start_send();
 
 	sdp_dbg_leave();
 }
@@ -566,5 +677,14 @@ void Client::start_complete_search()
 	start_attr_serv_search(svcs,attrs);
 }
 
+/*	cached search, nothing is transmitted/received over the air
+*/
+
+void Client::cached_complete_search()
+{
+	/*	this one is easy, just return everything
+	*/
+	this->on_read_response(0, pvt->cached_records);
+}
 
 }//namespace Sdp

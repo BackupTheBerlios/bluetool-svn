@@ -1,4 +1,4 @@
-#! /usr/bin/env python
+#!/usr/bin/env python
 
 import sys
 import os
@@ -8,6 +8,14 @@ import gtk
 import gtk.glade
 import gobject
 import dbus
+import pdb
+
+from bluetool_parser import BluezConfig
+
+if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
+    import dbus.glib
+
+HCID_CONF_PATH = './hcid.conf'
 
 #
 #	CONSTANTS (stolen from hci.h in Bluez 2.19)
@@ -23,64 +31,8 @@ HCI_LP_HOLD	= 0x0002
 HCI_LP_SNIFF	= 0x0004
 HCI_LP_PARK	= 0x0008
 
-
-from bluetool_dbus import BluetoolManagerProxy, BluetoolDeviceProxy
-from bluetool_parser import BluezConfig
-
-HCID_CONF = 'hcid.conf'
-
-DEFAULT = -1
-OFF = 0
-ON = 1
-TRISTATES = set([DEFAULT, ON, OFF])
-
-def set_tristate(widget, state):
-	if state not in TRISTATES: return
-
-	widget.tristate = state
-
-	if widget.tristate == ON:
-		widget.set_inconsistent(False)
-		widget.set_active(True)
-
-	elif widget.tristate == OFF:
-		widget.set_inconsistent(False)
-		widget.set_active(False)	
-
-	elif widget.tristate == DEFAULT:
-		widget.set_inconsistent(True)
-
-def toggle_tristate(widget):
-
-	try:
-		if widget.frozen: return
-	except:
-		pass
-
-	try:
-		ts = widget.tristate
-	except:
-		if widget.get_inconsistent():
-			widget.tristate = DEFAULT
-		else:
-			widget.tristate = OFF
-
-	widget.frozen = True
-
-	if widget.tristate == ON:
-		set_tristate(widget, DEFAULT)
-
-	elif widget.tristate == OFF:
-		set_tristate(widget, ON)
-
-	elif widget.tristate == DEFAULT:
-		set_tristate(widget, OFF)
-
-	widget.frozen = False
-	return widget.tristate
-
 #
-#	Device class encoding tables (straight from the BT assigned numbers page)
+#	Device class decoding tables (straight from the BT assigned numbers page)
 #
 device_service_classes = [
 	#"Limited Discoverable Mode", None, None, 
@@ -129,258 +81,552 @@ device_major_minor_classes = [
 ]
 
 #
+#	a simple tristate button
+#
+DEFAULT = -1
+OFF = 0
+ON = 1
+TRISTATES = set([DEFAULT, ON, OFF])
+
+def set_tristate(widget, state):
+	if state not in TRISTATES: return
+
+	widget.tristate = state
+
+	if widget.tristate == ON:
+		widget.set_inconsistent(False)
+		widget.set_active(True)
+
+	elif widget.tristate == OFF:
+		widget.set_inconsistent(False)
+		widget.set_active(False)	
+
+	elif widget.tristate == DEFAULT:
+		widget.set_inconsistent(True)
+
+def toggle_tristate(widget):
+
+	try:
+		if widget.frozen: return
+	except:
+		pass
+
+	try:
+		ts = widget.tristate
+	except:
+		if widget.get_inconsistent():
+			widget.tristate = DEFAULT
+		else:
+			widget.tristate = OFF
+
+	widget.frozen = True
+
+	if widget.tristate == ON:
+		set_tristate(widget, DEFAULT)
+
+	elif widget.tristate == OFF:
+		set_tristate(widget, ON)
+
+	elif widget.tristate == DEFAULT:
+		set_tristate(widget, OFF)
+
+	widget.frozen = False
+
+	print widget.tristate
+	return widget.tristate
+
+#
 #	the main window
 #
 class BluetoolCfgPanel:
 
 	#
-	#	functions to display conf data in the gui and vice versa
+	#	populate the gui with settings stored in the model
 	#
-	def load_radio(self,opdict,opt):
-		if self.updating: return
+	def model_to_ui(self):
 
 		self.updating = True
-
-		self['bt_'+opt+'_'+opdict[opt][0]+'_rb'].set_active(True)
-
-		self.updating = False
-
-	def save_radio(self,prop,vals):
-		if self.updating: return
-
-		self.updating = True
-
-		for val in vals:
-			if self['bt_'+prop+'_'+val+'_rb'].get_active():
-				print 'bt_'+prop+'_'+val+'_rb', 'is', True
-				self.config.options[prop] = [val]
-				break
-
-		self.updating = False
-
-	def save_toggle(self,cdict,prop,val):
-		act = self['bt_'+prop+'_'+val+'_cb'].get_active()
-		print 'bt_'+prop+'_'+val+'_cb', 'is', act
-		if act:
-			if not cdict.has_key(prop):
-				cdict[prop] = []
-
-			if cdict[prop].count(val) == 0:
-				cdict[prop].append(val)
-
-		elif cdict.has_key(prop):
-			if cdict[prop].count(val) != 0:
-				cdict[prop].remove(val)
-
-				if len(cdict[prop]) == 0:
-					cdict.pop(prop)
-			
-	def save_enabled(self,cdict,prop):
-		self.save_toggle(cdict,prop,'enable')
-
-	#
-	#	clear the gui
-	#
-	def clear_device_panel(self):
-		self['bt_devname_txt'].set_text('')
-		self['bt_devclass_tgb'].set_label('')
-		self['bt_auth_enable_cb'].set_active(False)	
-		self['bt_encrypt_enable_cb'].set_active(False)
-		self['bt_pscan_enable_cb'].set_active(False)
-		self['bt_iscan_enable_cb'].set_active(False)
-		self['bt_lm_accept_cb'].set_active(False)
-		self['bt_lm_master_cb'].set_active(False)
-		self['bt_lp_rswitch_cb'].set_active(False)
-		self['bt_lp_hold_cb'].set_active(False)
-		self['bt_lp_sniff_cb'].set_active(False)
-		self['bt_lp_park_cb'].set_active(False)
-		self['bt_voice_btn'].set_label(repr(0))
-	
-	def clear_keys_panel(self):
-		pass
-
-	def clear_status_panel(self):
-		self['bt_status_lab'].set_text('not present')
-		self['bt_rxbytes_lab'].set_text('0')
-		self['bt_txbytes_lab'].set_text('0')
-		self['bt_address_lab'].set_text('00:00:00:00:00:00')
-		self['bt_hciver_lab'].set_text('')
-		self['bt_lmpver_lab'].set_text('')
-		self['bt_firmware_lab'].set_text('')
-		self['bt_manuf_lab'].set_text('')
-		self['bt_feats_lab'].set_text('')
-
-
-
-	#
-	#	reads stored configuration into the gui
-	#
-	def load_dev_cfg(self,cdict):
-
-		self.updating = True
-
-		self.clear_device_panel()
-		self.clear_status_panel()
-
-		print "cdict",cdict
-
-		if cdict.has_key('name'):
-			name = cdict['name'][0].strip('"')
-		else:	name = ''
-
-		self['bt_devname_txt'].set_text(name)
-
-		if cdict.has_key('class'):
-			clss = cdict['class'][0]
-		else:	clss = '0x000000'
-
-		self['bt_devclass_tgb'].set_label(clss)
-
-		for key in ('auth','encrypt','iscan','pscan'):
-			val = cdict.has_key(key) and cdict[key][0] == 'enable'
-
-			self['bt_'+key+'_enable_cb'].set_active(val)
-
-		if cdict.has_key('lm'):
-			for man in ('accept','master'):
-				val = cdict['lm'].count(man) != 0
-				self['bt_lm_'+man+'_cb'].set_active(val)
-
-		if cdict.has_key('lp'):
-			for man in ('rswitch','hold','sniff','park'):
-				val = cdict['lp'].count(man) != 0
-				self['bt_lp_'+man+'_cb'].set_active(val)
-
-		self.updating = False
-
-	#
-	#	...and the other way around
-	#
-	def read_ui_and_store_cfg(self):
 		
-		# if autosave disabled, quit
-		if not self.dev_liststore.get_value(self.curr_row,3):
-			self.config.store()
-			return
+		for widget_name in self.cfg_mdl.keys():
+			active = self.cfg_mdl[widget_name][0]
+			self[widget_name].set_active(active)
 
-		self.updating = True
-
-		if self['bt_autoinit_cb'].get_active():
-			p = ['yes']
-		else:	p = ['no']
-		self.config.options['autoinit'] = p
-
-		self.save_radio('pairing',('none','multi','once'))
-
-		self.save_radio('security',('auto','user','none'))
-
-		self.save_enabled(self.curr_dev_cfg,'auth')
-		self.save_enabled(self.curr_dev_cfg,'encrypt')
-		self.save_enabled(self.curr_dev_cfg,'iscan')
-		self.save_enabled(self.curr_dev_cfg,'pscan')
-		self.save_toggle(self.curr_dev_cfg,'lm','accept')
-		self.save_toggle(self.curr_dev_cfg,'lm','master')
-		self.save_toggle(self.curr_dev_cfg,'lp','rswitch')
-		self.save_toggle(self.curr_dev_cfg,'lp','hold')
-		self.save_toggle(self.curr_dev_cfg,'lp','sniff')
-		self.save_toggle(self.curr_dev_cfg,'lp','park')
-
-		self.updating = False
-
-		self.config.store()
-
-	#
-	#	reads current configuration directly from the device into the ui
-	#
-	def live_dev_cfg(self,dev):
-		#
-		#	first of all, get status, if interface is down, just give up
-		#
-		self.updating = True
-
-		self.clear_device_panel()
-		self.clear_keys_panel()
-		self.clear_status_panel()
-
-		up,rx,re,tx,te = dev['stats']
-		if not up:
-			self['bt_status_lab'].set_text('OFF');
-			# the rest was cleared by clear_xxx_panel()
-
+		#for dev in self.cfg-
+		bt_devices_cb = self['bt_devices_cb']
+		idx = bt_devices_cb.get_active()
+		print 'idx',idx
+		if idx < 0:
 			self.updating = False
 			return
 
-		#
-		#	get status
-		#
-		self['bt_status_lab'].set_text('ON')
-		self['bt_rxbytes_lab'].set_text(repr(rx))
-		self['bt_txbytes_lab'].set_text(repr(tx))
+		row = self.dev_store[(idx,)]
 
-		addr = dev['address']
-		self['bt_address_lab'].set_text(addr)
+		self['bt_cfgsave_tgb'].set_active(row[3])
+		dev_mdl = row[1]
 
-		hci_ver, hci_rev, lmp_ver, lmp_sub, manuf = dev['version_info']
-		self['bt_hciver_lab'].set_text(str(hci_ver)+' (rev. '+repr(hci_rev)+')')
-		self['bt_lmpver_lab'].set_text(str(lmp_ver)+' (sub. '+repr(lmp_sub)+')')
-		self['bt_manuf_lab'].set_text(manuf)
+		#print repr(dev_mdl)
 
-		feats = dev['features']
-		#self['bt_feats_lab'].set_text(feats)
+		for widget_name in dev_mdl.keys():
+			active = dev_mdl[widget_name][0]
+			tristate = dev_mdl[widget_name][1]
+			#print repr(dev_mdl[widget_name])
+			if   widget_name.endswith('_cb'):
+				if tristate:
+					set_tristate(self[widget_name],active)
+					#toggle_tristate(self[widget_name])
+				else:
+					if   active == ON:
+						self[widget_name].set_active(True)
+					elif active == OFF	\
+					or   active == DEFAULT:
+						self[widget_name].set_active(False)
 
-		#
-		#	get link keys (TODO)
-		#
+			elif widget_name == 'bt_devname_txt':
 
-		#
-		#	get settings
-		#
-		name = dev['name']
-		self['bt_devname_txt'].set_text(name)
+				name = dev_mdl[widget_name][3]
 
-		clsb = dev['class']
-		clsx = repr(clsb) #todo
-		self['bt_devclass_tgb'].set_label(clsx)
+				if len(name): 
+					name = name.strip('"')
 
-		auth = dev['auth_enable']
-		self['bt_auth_enable_cb'].set_active(auth)
-	
-		encrypt = dev['encrypt_mode']
-		self['bt_encrypt_enable_cb'].set_active(encrypt)
+				if   active == ON:
+					self['bt_devname_cb'].set_active(True)
+				elif active == OFF	\
+				or   active == DEFAULT:
+					self['bt_devname_cb'].set_active(False)
 
-		scan = dev['scan_enable']
+				if self['bt_devname_cb'].get_active():
+					self[widget_name].set_text(name)
+					self[widget_name].set_property('editable',True)
+				else:
+					self[widget_name].set_text('')
+					self[widget_name].set_property('editable',False)
 
-		pscan = scan & HCI_SCAN_PAGE
-		self['bt_pscan_enable_cb'].set_active(pscan)
+			elif widget_name == 'bt_devclass_tgb':
 
-		iscan = scan & HCI_SCAN_INQUIRY
-		self['bt_iscan_enable_cb'].set_active(iscan)
+				cls = dev_mdl[widget_name][3]
+				if len(cls): 
+					cls = int(cls,16)
+				else:	cls = 0
 
-		lm = dev['link_mode']
+				if   active == ON:
+					self['bt_devclass_cb'].set_active(True)
+				elif active == OFF	\
+				or   active == DEFAULT:
+					self['bt_devclass_cb'].set_active(False)
 
-		accept = lm & HCI_LM_ACCEPT
-		self['bt_lm_accept_cb'].set_active(accept)
+				self[widget_name].set_label(hex(cls))
+				
+				self.class_model_to_ui(cls)
 
-		master = lm & HCI_LM_MASTER
-		self['bt_lm_master_cb'].set_active(master)
+		stat_mdl = row[6]
 
-		lp = dev['link_policy']
-		rswitch = lp & HCI_LP_RSWITCH
-		self['bt_lp_rswitch_cb'].set_active(rswitch)
-
-		hold = lp & HCI_LP_HOLD
-		self['bt_lp_hold_cb'].set_active(hold)
-
-		sniff = lp & HCI_LP_SNIFF
-		self['bt_lp_sniff_cb'].set_active(sniff)
-
-		park = lp & HCI_LP_PARK
-		self['bt_lp_park_cb'].set_active(park)
-
-		vs = dev['voice_setting']
-		self['bt_voice_btn'].set_label(repr(vs))
+		for widget_name in stat_mdl.keys():
+			if widget_name.endswith('_lab'):
+				self[widget_name].set_label(stat_mdl[widget_name])
 
 		self.updating = False
+
+	#
+	#	update the model from widgets state
+	#
+	def ui_to_model(self):
+
+		for widget_name in self.cfg_mdl.keys():
+			active = self[widget_name].get_active()
+			self.cfg_mdl[widget_name][0] = active
+			#print repr(self.cfg_mdl[widget_name])
+
+
+		bt_devices_cb = self['bt_devices_cb']
+		idx = bt_devices_cb.get_active()
+		print 'idx',idx
+		if idx < 0: return
+
+		row = self.dev_store[(idx,)]
+
+		dev_mdl = row[1]
+		for widget_name in dev_mdl.keys():
+			tristate = dev_mdl[widget_name][1]
+
+			if tristate:
+				active = self[widget_name].tristate
+			elif widget_name.endswith('_cb'):		
+				active = self[widget_name].get_active()
+
+			dev_mdl[widget_name][0] = active
+
+		#todo: name & class
+
+	#
+	#	device class dialog
+	#
+	def class_model_to_ui(self,cls):
+		dcw = self.devclass_widgets
+
+		svc   = dcw.get_widget('bt_devclass_service_tv')
+
+		sel   = svc.get_selection()
+		sel.unselect_all()
+
+		svc_id = ( cls >> 16 ) & 0xff;
+		maj_id = ( cls >> 8 )  & 0xff;
+		min_id = ( cls ) & 0xff;
+
+		for bit in range(0,7):
+			if svc_id & (1 << bit):
+				sel.select_iter(self.devclass_service_store.iter_nth_child(None,bit))
+
+		major = dcw.get_widget('bt_devclass_major_tv')
+
+		minor = dcw.get_widget('bt_devclass_minor_tv')
+
+		sel = major.get_selection()
+		it = self.devclass_major_store.iter_nth_child(None,maj_id)
+		sel.select_iter(it)
+
+		sel = minor.get_selection()
+		#print self.devclass_major_store[it][0]
+		store = self.devclass_minor_stores[self.devclass_major_store[it][0]]
+		sel.select_iter(store.iter_nth_child(None,min_id))
+		
+	def class_ui_to_model(self):
+		dcw = self.devclass_widgets
+		svc   = dcw.get_widget('bt_devclass_service_tv')
+		major = dcw.get_widget('bt_devclass_major_tv')
+		minor = dcw.get_widget('bt_devclass_minor_tv')
+
+		bt_devices_cb = self['bt_devices_cb']
+		idx = bt_devices_cb.get_active()
+		if idx < 0: return
+
+		dev_mdl = self.dev_store[(idx,)][1]
+
+		svc_id = 0;
+		maj_id = 0;
+		min_id = 0;
+
+		model,rows   = svc.get_selection().get_selected_rows()
+		for bit in [ s[0] for s in rows ]:
+			svc_id |= ( 1 << bit )
+
+		model,it = major.get_selection().get_selected()
+		maj_id = model.get_path(it)[0]
+
+		model,it = minor.get_selection().get_selected()
+		min_id = model.get_path(it)[0]
+		
+		dev_mdl['bt_devclass_tgb'][3] = hex((svc_id << 16 ) | (maj_id << 8) | (min_id))		
+
+
+	#
+	#
+	#
+	def manager_to_model(self):
+		try:
+			devs = self.dbus_manager.ListDevices()
+
+			for devpath in devs:
+				dev = self.sys_bus.get_object('org.bluetool',devpath)
+				hci = dbus.Interface(dev,'org.bluetool.device.hci')
+
+				dev_mdl = self.device_model()
+				stat_mdl = self.status_model()
+
+				up,rx_bts,rx_err,tx_bts,tx_err = hci.GetProperty('stats')
+	
+				print up,rx_bts,rx_err,tx_bts,tx_err
+
+				name = ''
+	
+				address = hci.GetProperty('address')[1]
+	
+				if up != 0:
+					name = hci.GetProperty('name')[1]
+
+					stat_mdl['bt_status_lab'] = 'ON'
+					stat_mdl['bt_rxbytes_lab'] = repr(rx_bts)
+					stat_mdl['bt_txbytes_lab'] = repr(tx_bts)
+					stat_mdl['bt_address_lab'] = address
+
+					hci_ver, hci_rev, lmp_ver, lmp_rev, man = hci.GetProperty('version_info')[1:]
+					stat_mdl['bt_hciver_lab'] = str(hci_ver) + ' ( rev. ' + repr(hci_rev) + ' )'
+					stat_mdl['bt_lmpver_lab'] = str(lmp_ver) + ' ( sub. ' + repr(lmp_rev) + ' )'
+					stat_mdl['bt_manuf_lab'] = man
+
+					dev_mdl['bt_devname_txt'][0] = ON
+					dev_mdl['bt_devname_txt'][3] = name
+					print dev_mdl['bt_devname_txt']
+
+					dev_mdl['bt_devclass_tgb'][0] = ON
+					dev_mdl['bt_devclass_tgb'][3] = hex(hci.GetProperty('class')[1])
+
+					if hci.GetProperty('auth_enable') == 0:
+						ae = OFF
+					else:
+						ae = ON
+					dev_mdl['bt_auth_enable_cb'][0] = ae
+
+					if hci.GetProperty('encrypt_mode') == 0:
+						ee = OFF
+					else:
+						ee = ON
+					dev_mdl['bt_encrypt_enable_cb'][0] = ee
+
+					scan = hci.GetProperty('scan_enable')[1]
+					if scan & HCI_SCAN_INQUIRY:
+						dev_mdl['bt_iscan_enable_cb'][0] = ON
+					else:	dev_mdl['bt_iscan_enable_cb'][0] = OFF
+
+					if scan & HCI_SCAN_PAGE:
+						dev_mdl['bt_pscan_enable_cb'][0] = ON
+					else:	dev_mdl['bt_pscan_enable_cb'][0] = OFF
+
+					lm = hci.GetProperty('link_mode')[1]
+					if lm & HCI_LM_ACCEPT:
+						dev_mdl['bt_lm_accept_cb'][0] = ON
+					else:	dev_mdl['bt_lm_accept_cb'][0] = OFF
+
+					if lm & HCI_LM_MASTER:
+						dev_mdl['bt_lm_master_cb'][0] = ON
+					else:	dev_mdl['bt_lm_master_cb'][0] = OFF
+
+					lp = hci.GetProperty('link_policy')[1]
+
+					if lp & HCI_LP_RSWITCH:
+						dev_mdl['bt_lp_rswitch_cb'][0] = ON
+					else:	dev_mdl['bt_lp_rswitch_cb'][0] = OFF
+
+					if lp & HCI_LP_HOLD:
+						dev_mdl['bt_lp_hold_cb'][0] = ON
+					else:	dev_mdl['bt_lp_hold_cb'][0] = OFF
+
+					if lp & HCI_LP_SNIFF:
+						dev_mdl['bt_lp_sniff_cb'][0] = ON
+					else:	dev_mdl['bt_lp_sniff_cb'][0] = OFF
+
+					if lp & HCI_LP_PARK:
+						dev_mdl['bt_lp_park_cb'][0] = ON
+					else:	dev_mdl['bt_lp_park_cb'][0] = OFF
+				else:
+					stat_mdl['bt_status_lab'] = 'OFF'
+	
+				if len(name):	lbl = address + ' ( ' + name + ' ) '
+				else:		lbl = address
+
+				self.dev_store.append([address,dev_mdl,dev, False,'',lbl,stat_mdl])
+
+		except dbus.dbus_bindings.DBusException, e:
+			#bt_error_popup('Unable to communicate with device:'+repr(e))
+			print 'Unable to communicate with device:'+str(e)
+
+
+	#
+	#
+	#
+	def model_to_file(self):
+		
+		opts = self.cfg_file.options
+
+		for widget_name in self.cfg_mdl.keys():
+			active, optname, good, bad = self.cfg_mdl[widget_name]
+
+			if not opts.has_key(optname):
+				opts[optname] = []
+
+			if active:
+
+				try:	opts[optname].remove(bad)
+				except:	pass
+					
+				if opts[optname].count(good) == 0:
+					opts[optname].append(good)
+
+			else:
+
+				try:	opts[optname].remove(good)
+				except:	pass
+					
+				if len(bad) and opts[optname].count(bad) == 0:
+					opts[optname].append(bad)
+
+				if len(opts[optname]) == 0:
+					opts.pop(optname)
+
+		devs = self.cfg_file.devices
+
+		for (address, model, dbus, save, name, label, stats_mdl) in self.dev_store:
+
+			print 'save', save
+			if not save:
+				if devs.has_key(address):
+					devs.pop(address)
+				continue
+
+			if not devs.has_key(address):
+				devs[address] = {}
+
+			dev_cfg = devs[address]
+
+			print "[bef]",dev_cfg
+
+			for opt in model.keys():
+				active, tristate, optname, val_on, val_off = model[opt]
+
+				print active, tristate, optname, val_on, val_off
+
+				if optname == 'name' or optname == 'class': continue
+
+				if tristate:
+					if active == DEFAULT:
+						if dev_cfg.has_key(optname):
+							dev_cfg.pop(optname)
+						continue
+					elif active == ON:
+						active = True
+					elif active == OFF:
+						active = False
+
+				if not dev_cfg.has_key(optname):
+					dev_cfg[optname] = []
+#
+				if active:
+
+					try:	dev_cfg[optname].remove(val_off)
+					except:	pass
+					
+					if dev_cfg[optname].count(val_on) == 0:
+						dev_cfg[optname].append(val_on)
+
+				else:
+					#pdb.set_trace()
+
+					try:	dev_cfg[optname].remove(val_on)
+					except:	pass
+					
+					if len(val_off) and dev_cfg[optname].count(val_off) == 0:
+						dev_cfg[optname].append(val_off)
+
+					if len(dev_cfg[optname]) == 0:
+						dev_cfg.pop(optname)
+
+			print "[aft]",dev_cfg
+
+#
+
+		self.cfg_file.store()
+
+	#
+	#
+	#
+	def file_to_model(self):
+		
+		opts = self.cfg_file.options
+		for opt in opts.keys():
+			#print 'opt',opt
+			for val in opts[opt]:
+				#print 'val',val
+				for row in self.cfg_mdl.keys():
+					#print 'row',repr(row)
+					if self.cfg_mdl[row][1] == opt:
+						if   self.cfg_mdl[row][2] == val:
+							self.cfg_mdl[row][0] = True
+						#elif self.cfg_mdl[row][3] == val:
+						else:
+							self.cfg_mdl[row][0] = False
+						
+
+		devs = self.cfg_file.devices
+		for dev in devs.keys():
+			print 'dev',dev
+			#for row in self.dev_store:
+			#	if dev == row[0]:
+			#		pass
+			dev_mdl = self.device_model()
+			stat_mdl = self.status_model()
+			if len(dev) == 0:
+				lbl = 'Any Device'
+			else:	lbl = dev
+
+			self.dev_store.append([dev,dev_mdl,None,True,'',lbl,stat_mdl])
+			for opt in devs[dev]:
+				for val in devs[dev][opt]:
+					for row in dev_mdl.keys():
+						if dev_mdl[row][2] == opt:
+							#print 'opt', opt, 'row3', dev_mdl[row][3], 'row4', dev_mdl[row][4]
+							if   dev_mdl[row][3] == val:
+								dev_mdl[row][0] = ON
+							elif dev_mdl[row][4] == val:
+								dev_mdl[row][0] = OFF
+							#else:
+							#	dev_mdl[row][0] = DEFAULT
+							#print '>', repr(dev_mdl[row])
+							#print repr(dev_mdl[row])
+
+			if devs[dev].has_key('name'):
+				dev_mdl['bt_devname_txt'][0] = ON
+				name = devs[dev]['name'][0]
+				dev_mdl['bt_devname_txt'][3] = name
+			else:
+				dev_mdl['bt_devname_txt'][0] = OFF
+				
+			if devs[dev].has_key('class'):
+				dev_mdl['bt_devclass_tgb'][0] = ON
+				cls = devs[dev]['class'][0]
+				dev_mdl['bt_devclass_tgb'][3] = cls
+			else:
+				dev_mdl['bt_devclass_tgb'][0] = OFF
+				
+
+	def ui_to_file(self):
+		self.ui_to_model()
+		self.model_to_file()
+
+	#
+	#
+	#
+	def device_model(self):
+		dic = {
+
+			# widget		# active # tri-state #optname #value-if-on/off
+
+			'bt_devname_txt':	[DEFAULT, False, 'name', '', ''],
+			'bt_devclass_tgb':	[DEFAULT, False, 'class', '', ''],
+
+			'bt_auth_enable_cb':	[DEFAULT, True, 'auth', 'enable', 'disable'],
+			'bt_encrypt_enable_cb':	[DEFAULT, True, 'encrypt', 'enable', 'disable'],
+
+			'bt_iscan_enable_cb':	[DEFAULT, True, 'iscan', 'enable', 'disable'],
+			'bt_pscan_enable_cb':	[DEFAULT, True, 'pscan', 'enable', 'disable'],
+
+			'bt_lm_accept_cb':	[DEFAULT, False, 'lm', 'accept', ''],
+			'bt_lm_master_cb':	[DEFAULT, False, 'lm', 'master', ''],
+	
+			'bt_lp_rswitch_cb':	[DEFAULT, False, 'lp', 'rswitch', ''],
+			'bt_lp_hold_cb':	[DEFAULT, False, 'lp', 'hold', ''],
+			'bt_lp_sniff_cb':	[DEFAULT, False, 'lp', 'sniff', ''],
+			'bt_lp_park_cb':	[DEFAULT, False, 'lp', 'park', '']
+		}
+		for w in dic.keys():
+			#if dic[w][1]: 
+			self[w].tristate = DEFAULT#dic[w][0]
+
+		return dic
+
+	def status_model(self):
+		dic = {
+			# widget		# label
+
+			'bt_status_lab':	'Not present',
+			'bt_rxbytes_lab':	'N/A',
+			'bt_txbytes_lab':	'N/A',
+			'bt_address_lab':	'N/A',
+			'bt_hciver_lab':	'N/A',
+			'bt_lmpver_lab':	'N/A',
+			'bt_firmware_lab':	'',
+			'bt_manuf_lab':		'N/A',
+			'bt_feats_lab':		''
+		}
+		return dic
 
 	#
 	#	constructor
@@ -398,7 +644,7 @@ class BluetoolCfgPanel:
 			"on_bt_autoinit_cb_clicked"	: self.on_toggle_autoinit,
 			"on_bt_pairing_rb_toggled"	: self.on_toggle_pairing,
 			"on_bt_secmgr_rb_toggled"	: self.on_toggle_secmgr,
-			"on_bt_devname_txt_key_press"	: self.on_name_changed,
+			"on_bt_devname_txt_enter"	: self.on_name_changed,
 			"on_bt_devclass_tgb_toggled"	: self.on_popup_devclass,
 			"on_bt_auth_cb_clicked"		: self.on_toggle_auth,
 			"on_bt_encrypt_cb_clicked"	: self.on_toggle_encrypt,
@@ -416,10 +662,11 @@ class BluetoolCfgPanel:
 		#
 		#	initialize device class panel
 		#
-		self.devclass_widgets = gtk.glade.XML('bluetool_gui.glade', 'bt_devclass_panel')
+		self.devclass_widgets = gtk.glade.XML('bluetool_gui.glade', 'bt_devclass_dlg')
 		devclass_handlers = {
 			"on_bt_devclass_update"		: self.on_update_devclass,
 			"on_bt_devclass_change"		: self.on_change_devclass,
+			"on_bt_devclass_cancel"		: self.on_cancel_devclass,
 			"on_bt_devclass_close"		: self.on_close_devclass
 		}
 		self.devclass_widgets.signal_autoconnect(devclass_handlers)
@@ -480,254 +727,80 @@ class BluetoolCfgPanel:
 		self.devclass_minor_col.pack_start(minor_cell,True)
 		self.devclass_minor_col.add_attribute(minor_cell,'text',0)
 
-		self.class_to_ui(0x3e,0x01,0x00) # start with a default value
-
-		#major.pack_start(cell,True)
-		#major.add_attribute(cell,'text',1)
-
-		#minor.pack_start(cell,True)
-		#minor.add_attribute(cell,'text',1)
-
 		#
-		#	init list
+		#	'options' panel
 		#
-		self.dev_liststore = gtk.ListStore(str,str,str,bool,int)
-					# path, address, label, autosave, status (-1 non present, 0 off, 1 on)
-		cell = gtk.CellRendererText()
+		self.cfg_mdl = {
+
+			# widget		# state	# optname # value-if-on/off
+
+			'bt_autoinit_cb'     :	[False, 'autoinit', 'yes', 'no'],
+
+			'bt_pairing_none_rb' :	[False, 'pairing', 'none', ''],
+			'bt_pairing_multi_rb':	[False, 'pairing', 'multi', ''],
+			'bt_pairing_once_rb' :	[False, 'pairing', 'once', ''],
+
+			'bt_security_none_rb':	[False, 'security', 'none', ''],
+			'bt_security_auto_rb':	[False, 'security', 'auto', ''],
+			'bt_security_user_rb':	[False, 'security', 'user', '']
+		}
+					# address # model # dbus_object # save # name # label # stats_mdl
+		self.dev_store = gtk.ListStore(str, object, object, bool, str, str, object)
+					# the order is screwed but it's hard to readjust all indexes at code-time
+					# and unfortunately we can use a dictionary since gtk stores are only lists
+
+		dev_cell = gtk.CellRendererText()
 		bt_devices_cb = self['bt_devices_cb']
-		bt_devices_cb.set_model(self.dev_liststore)
-		bt_devices_cb.pack_start(cell,True)
-		bt_devices_cb.add_attribute(cell,'text',2)
+		bt_devices_cb.pack_start(dev_cell,True)
+		bt_devices_cb.add_attribute(dev_cell,'text',5)
+		bt_devices_cb.set_model(self.dev_store)
 
 		#
-		#	load hcid configuration
+		#	open conf file
 		#
-		self.config = BluezConfig(HCID_CONF)
-		opts = self.config.options
+		self.cfg_file = BluezConfig(HCID_CONF_PATH)
 
 		#
-		#	load default settings
+		#	load configuration from file
 		#
-		self.curr_row = self.dev_liststore.append(['','','Any device',True,False])
-		self.curr_dev_cfg = None
-		self.curr_dev = None
-
-		self.updating = True
-		
-		self['bt_autoinit_cb'].set_active(opts.has_key('autoinit') and opts['autoinit'][0] == 'yes')
-
-		self.load_radio(opts,'pairing')
-		self.load_radio(opts,'security')
-
-		self.updating = False
-		
-		#
-		#	load dbus wrapper
-		#
-		self.manager = BluetoolManagerProxy(self)
+		self.file_to_model()
 
 		#
-		#	on start, select the default device
+		#	create dbus proxy
 		#
+		self.sys_bus = dbus.SystemBus()
+		self.dbus_manager = dbus.Interface(
+			self.sys_bus.get_object('org.bluetool','/org/bluetool/manager'),
+			'org.bluetool.manager'
+		)
+
+		#
+		#	load configuration directly from devices (via dbus)
+		#
+		self.manager_to_model()
+
+		self.model_to_ui()
+
 		bt_devices_cb.set_active(0)
 
-	def on_device_added(self,dev):
-		addr = dev['address']
-		name = dev['name']
-		self.dev_liststore.append([dev.path, addr, name+"\t("+addr+")",False,False]);
 
-	def on_device_removed(self,dev):
-		it = self.dev_liststore.get_iter_first()
-		while 1:
-			it = self.dev_liststore.iter_next(it)
-			if it is None: break
-			if self.dev_liststore.get_value(it,0) == dev.path:
-				#
-				#	also, if this is the device we're displaying
-				#	at the moment, show another before removal
-				#
-				self.dev_liststore.remove(it)
-				if self['bt_devices_cb'].get_active() < 0:
-					self['bt_devices_cb'].set_active(0)
-				break
-			
-	def on_device_up(self,dev):
-		it = self.dev_liststore.get_iter_first()
-		while 1:
-			it = self.dev_liststore.iter_next(it)
-			if it is None: break
-			if self.dev_liststore.get_value(it,0) == dev.path:
-				self.dev_liststore.set_value(it,4,True)
-				break
+	def __getitem__(self,key):
+		return self.widgets.get_widget(key)
 
-	def on_device_down(self,dev):
-		it = self.dev_liststore.get_iter_first()
-		while 1:
-			it = self.dev_liststore.iter_next(it)
-			if it is None: break
-			if self.dev_liststore.get_value(it,0) == dev.path:
-				self.dev_liststore.set_value(it,4,False)
-				break
-
-	#
-	#	error reporting
-	#
-	def bt_popup_error(self,list):
-		dialog = gtk.MessageDialog(
-			parent         = None,
-			flags          = gtk.DIALOG_DESTROY_WITH_PARENT | gtk.DIALOG_MODAL,
-			type           = gtk.MESSAGE_ERROR,
-			buttons        = gtk.BUTTONS_OK,
-			message_format = list[0]
-		)
-		dialog.connect('response',lambda x,y:dialog.destroy())
-		dialog.show()		
-
-	def bt_print_error(self,list):
-		print "error: ",list[0]
-
-	def bt_empty_handler(self,list):
-		#print list
+	def add_device(self,address):
 		pass
 
-	def on_select_device(self,widget):
-
-		idx = widget.get_active()
-
-		if idx < 0: idx = 0	# the default device is always present
-
-		self.curr_row = self.dev_liststore.iter_nth_child(None,idx)
-		devpath = self.dev_liststore.get_value(self.curr_row,0)
-		devaddr = self.dev_liststore.get_value(self.curr_row,1)
-		autosave = self.dev_liststore.get_value(self.curr_row,3)
-
-		self.updating = True
-
-		self['bt_cfgsave_tgb'].set_active(autosave)
-
-		self.updating = False
-
-		print "stored device configurations: ", self.config.devices
-
-		#
-		#	do we have already a saved configuration for this device ?
-		#
-		if self.config.devices.has_key(devaddr):
-			self.curr_dev_cfg = self.config.devices[devaddr]
-
-		elif autosave:
-			self.curr_dev_cfg = self.config.devices[devaddr] = {}
-
-		else:
-			self.curr_dev_cfg = None
-
-		print "curr_cfg",self.curr_dev_cfg
-
-		#
-		#	is the device present right now ?
-		#
-		if self.manager.devices.has_key(devpath):
-			self.curr_dev = self.manager.devices[devpath]
-		else:
-			self.curr_dev = None
-
-		#if self.updating: return
-
-		if self.curr_dev_cfg:
-			self.load_dev_cfg(self.curr_dev_cfg)
-		else:
-			self.live_dev_cfg(self.curr_dev)
+	def rem_device(self,address):
+		pass
 
 	def on_close(self,widget):
 		gtk.main_quit()
-
-	def on_toggle_autosave(self,widget):
-		if self.updating: return
-
-		self.updating = True
-
-		if self['bt_devices_cb'].get_active() == 0: # 'Any' device
-			widget.set_active(True)
-
-		self.dev_liststore.set_value(self.curr_row,3,widget.get_active())
-
-		devpath = self.dev_liststore.get_value(self.curr_row,0)
-		addr = self.dev_liststore.get_value(self.curr_row,1)
-		autosave = self.dev_liststore.get_value(self.curr_row,3)
-
-		if self.config.devices.has_key(addr):
-
-			if autosave:
-				self.curr_dev_cfg = self.config.devices[addr]
-			else:
-				self.config.devices.pop(addr)
-				self.curr_dev_cfg = None
-
-		else:
-			if autosave:
-				self.curr_dev_cfg = self.config.devices[addr] = {}
-			else:
-				self.curr_dev_cfg = None
-
-		self.read_ui_and_store_cfg()
-
-		self.updating = False
-
-	def on_toggle_autoinit(self,widget):
-		if self.updating: return
-
-		self.read_ui_and_store_cfg()
-
-	def on_toggle_pairing(self,widget):
-		if self.updating: return
-		if not widget.get_active(): return
-
-		self.read_ui_and_store_cfg()
-
-	def on_toggle_secmgr(self,widget):
-		if self.updating: return
-		if not widget.get_active(): return
-
-		self.read_ui_and_store_cfg()
-
-	def on_name_changed(self,widget):
-		pass
-
+		
 	def on_popup_devclass(self,widget):
-		#self.devclass.re(widget.get_text())
 		if widget.get_active():
 			self.devclass_wnd.show()
 		else:
 			self.devclass_wnd.hide()
-		pass
-
-	def class_to_ui(self,service_mask,major_id,minor_id):
-		print "0x%02X%02X%02X" % (service_mask,major_id,minor_id)
-		dcw = self.devclass_widgets
-
-		svc   = dcw.get_widget('bt_devclass_service_tv')
-
-		sel   = svc.get_selection()
-		sel.unselect_all()
-		for bit in range(0,7):
-			if service_mask & (1 << bit):
-				sel.select_iter(self.devclass_service_store.iter_nth_child(None,bit))
-
-		major = dcw.get_widget('bt_devclass_major_tv')
-
-		minor = dcw.get_widget('bt_devclass_minor_tv')
-
-		sel = major.get_selection()
-		it = self.devclass_major_store.iter_nth_child(None,major_id)
-		sel.select_iter(it)
-
-		sel = minor.get_selection()
-		print self.devclass_major_store[it][0]
-		store = self.devclass_minor_stores[self.devclass_major_store[it][0]]
-		sel.select_iter(store.iter_nth_child(None,minor_id))
-
-	def ui_to_class(self):
-		return '0'
 
 	def on_update_devclass(self,widget):
 		print 'on_update_devclass'
@@ -748,130 +821,119 @@ class BluetoolCfgPanel:
 		sel = minor.get_selection()
 		if widget != minor:
 			sel.select_iter(minor_store.get_iter_first())
-		pass
 
 	def on_change_devclass(self,widget):
-		self['bt_devclass_tgb'].set_label(self.ui_to_class())
+		if self.updating: return
+
+		self.class_ui_to_model()
+		self.model_to_ui();	# shows the new class code in the box
+		self.model_to_file();	# saves it on file
+
+		self['bt_devclass_tgb'].set_active(False)
+
+	def on_cancel_devclass(self,wiget):
 		self['bt_devclass_tgb'].set_active(False)
 
 	def on_close_devclass(self,widget,data):
 		self['bt_devclass_tgb'].set_active(False)
 		return True
 
-	def set_dev_auth(self):
-		if self.curr_dev is None: return
-		auth = self['bt_auth_enable_cb'].get_active()
-		self.curr_dev.hci.SetProperty('auth_enable', dbus.Byte(auth),
-			reply_handler=self.bt_empty_handler, error_handler=self.bt_popup_error)
+	def on_toggle_autosave(self,widget):
+		if self.updating: return
+
+		idx = self['bt_devices_cb'].get_active()
+
+		if idx < 0:
+			return
+		elif idx == 0: # 'Any' device
+			widget.set_active(True) # you can't disable it
+
+	#	if widget.get_active() == False:
+			# todo, ask for confirmation
+	#		pass
+
+		self.dev_store[idx][3] = widget.get_active()
+		self.ui_to_file()
+
+	def on_select_device(self,widget):
+		if self.updating: return
+		self.model_to_ui()
+
+	def on_toggle_autoinit(self,widget):
+		if self.updating: return
+		self.ui_to_file()
+
+	def on_toggle_pairing(self,widget):
+		if self.updating: return
+		self.ui_to_file()
+
+	def on_toggle_secmgr(self,widget):
+		if self.updating: return
+		self.ui_to_file()
+
+	def on_name_changed(self,widget):
+		print widget.get_text()
 
 	def on_toggle_auth(self,widget):
 		if self.updating: return
-		
-		self.read_ui_and_store_cfg()
 
-	def set_dev_encrypt(self):
-		if self.updating: return
+		if widget == self['bt_auth_enable_cb']:
+			toggle_tristate(self['bt_auth_enable_cb'])
 
-		self.read_ui_and_store_cfg()
-
-		if self['bt_encrypt_enable_cb'].get_active():
-			enc = 2
-		else:
-			enc = 0
-		self.curr_dev.hci.SetProperty('encrypt_mode', dbus.Byte(enc),
-			reply_handler=self.bt_empty_handler, error_handler=self.bt_popup_error)
+		self.ui_to_file()
+		return True
 
 	def on_toggle_encrypt(self,widget):
 		if self.updating: return
 
-		self.read_ui_and_store_cfg()
+		if widget == self['bt_encrypt_enable_cb']:
+			toggle_tristate(self['bt_encrypt_enable_cb'])
 
-	def set_dev_scan(self):
-		if self.curr_dev is None: return
-		scan = 0
-		if self['bt_iscan_enable_cb'].get_active():
-			scan |= HCI_SCAN_INQUIRY
-		if self['bt_pscan_enable_cb'].get_active():
-			scan |= HCI_SCAN_PAGE
-		self.curr_dev.hci.SetProperty('scan_enable', dbus.Byte(scan),
-			reply_handler=self.bt_empty_handler, error_handler=self.bt_popup_error)
+		self.ui_to_file()
+		return True
 
 	def on_toggle_iscan(self,widget):
 		if self.updating: return
 
-		self.set_dev_scan()
-		self.read_ui_and_store_cfg()
+		if widget == self['bt_iscan_enable_cb']:
+			toggle_tristate(self['bt_iscan_enable_cb'])
+
+		self.ui_to_file()
+		return True
+
 
 	def on_toggle_pscan(self,widget):
 		if self.updating: return
 
-		self.set_dev_scan()
-		self.read_ui_and_store_cfg()
+		if widget == self['bt_pscan_enable_cb']:
+			toggle_tristate(self['bt_pscan_enable_cb'])
 
-	def set_dev_lm(self):
-		if self.curr_dev is None: return
-		lm = 0
-		if self['bt_lm_accept_cb'].get_active():
-			lm |= HCI_LM_ACCEPT
-		if self['bt_lm_master_cb'].get_active():
-			lm |= HCI_LM_MASTER
-		self.curr_dev.hci.SetProperty('link_mode', dbus.UInt32(lm),
-			reply_handler=self.bt_empty_handler, error_handler=self.bt_popup_error)
+		self.ui_to_file()
+		return True
 
 	def on_toggle_lm_accept(self,widget):
 		if self.updating: return
-
-		self.set_dev_lm()
-		self.read_ui_and_store_cfg()
+		self.ui_to_file()
 
 	def on_toggle_lm_master(self,widget):
 		if self.updating: return
-
-		self.set_dev_lm()
-		self.read_ui_and_store_cfg()
-
-	def set_dev_lp(self):
-		if self.curr_dev is None: return
-		lp = 0
-		if self['bt_lp_rswitch_cb'].get_active():
-			lp |= HCI_LP_RSWITCH
-		if self['bt_lp_hold_cb'].get_active():
-			lp |= HCI_LP_HOLD
-		if self['bt_lp_sniff_cb'].get_active():
-			lp |= HCI_LP_SNIFF
-		if self['bt_lp_park_cb'].get_active():
-			lp |= HCI_LP_PARK
-		self.curr_dev.hci.SetProperty('link_policy', dbus.UInt32(lp),
-			reply_handler=self.bt_empty_handler, error_handler=self.bt_popup_error)
+		self.ui_to_file()
 
 	def on_toggle_lp_rswitch(self,widget):
 		if self.updating: return
-
-		self.set_dev_lp()
-		self.read_ui_and_store_cfg()
+		self.ui_to_file()
 
 	def on_toggle_lp_hold(self,widget):
 		if self.updating: return
-
-		self.set_dev_lp()
-		self.read_ui_and_store_cfg()
+		self.ui_to_file()
 
 	def on_toggle_lp_sniff(self,widget):
 		if self.updating: return
-
-		self.set_dev_lp()
-		self.read_ui_and_store_cfg()
+		self.ui_to_file()
 
 	def on_toggle_lp_park(self,widget):
 		if self.updating: return
-
-		self.set_dev_lp()
-		self.read_ui_and_store_cfg()
-
-	def __getitem__(self,key):
-		return self.widgets.get_widget(key)
-
-
+		self.ui_to_file()
 #
 #	program entry point
 #
