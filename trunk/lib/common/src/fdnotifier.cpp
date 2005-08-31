@@ -16,7 +16,7 @@ struct FdNotifier::Private
 
 FdNotifier::Private::~Private()
 {
-	_dbg("destroyed  fdnotifier");
+	//_dbg("destroyed  fdnotifier");
 }
 
 FdNotifier* FdNotifier::create( int fd , int flags )
@@ -32,7 +32,7 @@ FdNotifier* FdNotifier::create( int fd , int flags )
 
 void FdNotifier::destroy( FdNotifier* fn )
 {
-	_dbg("destroying fdnotifier");
+	//_dbg("destroying fdnotifier");
 
 	FdNotifierRList::iterator i = g_fdnotifier_rlist.begin();
 
