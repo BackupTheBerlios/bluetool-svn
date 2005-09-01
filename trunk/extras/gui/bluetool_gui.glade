@@ -2408,6 +2408,7 @@ handheld</property>
 				  <property name="active">False</property>
 				  <property name="inconsistent">False</property>
 				  <property name="draw_indicator">True</property>
+				  <signal name="toggled" handler="on_bt_devname_cb_toggled" last_modification_time="Thu, 01 Sep 2005 02:45:04 GMT"/>
 				</widget>
 				<packing>
 				  <property name="left_attach">0</property>
@@ -2429,6 +2430,7 @@ handheld</property>
 				  <property name="active">False</property>
 				  <property name="inconsistent">False</property>
 				  <property name="draw_indicator">True</property>
+				  <signal name="toggled" handler="on_bt_devclass_cb_toggled" last_modification_time="Thu, 01 Sep 2005 02:44:55 GMT"/>
 				</widget>
 				<packing>
 				  <property name="left_attach">0</property>

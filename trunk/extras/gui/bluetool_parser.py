@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 import re
 
-conffile = 'hcid.conf'
+#conffile = 'hcid.conf'
 
 class BluezConfig:
 
@@ -103,8 +103,8 @@ class BluezConfig:
 		print self.devices
 
 	def store(self):
-		#fhandle = open(self.filepath, 'w+')
-		fhandle = open('hcid.out', 'w+')
+		fhandle = open(self.filepath, 'w+')
+		#fhandle = open('hcid.out', 'w+')
 
 		def dump_dict(dic):
 			for key in dic.keys():

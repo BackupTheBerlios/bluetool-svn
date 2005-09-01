@@ -162,14 +162,14 @@ class BluetoolCfgPanel:
 		row = self.dev_store[(idx,)]
 
 		self['bt_cfgsave_tgb'].set_active(row[3])
-		dev_mdl = row[1]
+		self.curr_dev_mdl = row[1]
 
 		#print repr(dev_mdl)
 
-		for widget_name in dev_mdl.keys():
-			active = dev_mdl[widget_name][0]
-			tristate = dev_mdl[widget_name][1]
-			#print repr(dev_mdl[widget_name])
+		for widget_name in self.curr_dev_mdl.keys():
+			active = self.curr_dev_mdl[widget_name][0]
+			tristate = self.curr_dev_mdl[widget_name][1]
+			#print repr(self.curr_dev_mdl[widget_name])
 			if   widget_name.endswith('_cb'):
 				if tristate:
 					set_tristate(self[widget_name],active)
@@ -183,7 +183,7 @@ class BluetoolCfgPanel:
 
 			elif widget_name == 'bt_devname_txt':
 
-				name = dev_mdl[widget_name][3]
+				name = self.curr_dev_mdl[widget_name][3]
 
 				if len(name): 
 					name = name.strip('"')
@@ -203,7 +203,7 @@ class BluetoolCfgPanel:
 
 			elif widget_name == 'bt_devclass_tgb':
 
-				cls = dev_mdl[widget_name][3]
+				cls = self.curr_dev_mdl[widget_name][3]
 				if len(cls): 
 					cls = int(cls,16)
 				else:	cls = 0
@@ -245,18 +245,27 @@ class BluetoolCfgPanel:
 		row = self.dev_store[(idx,)]
 
 		dev_mdl = row[1]
-		for widget_name in dev_mdl.keys():
-			tristate = dev_mdl[widget_name][1]
+		for widget_name in self.curr_dev_mdl.keys():
+			tristate = self.curr_dev_mdl[widget_name][1]
 
 			if tristate:
 				active = self[widget_name].tristate
 			elif widget_name.endswith('_cb'):		
 				active = self[widget_name].get_active()
 
-			dev_mdl[widget_name][0] = active
+			self.curr_dev_mdl[widget_name][0] = active
 
-		#todo: name & class
+		bt_devname_cb = self['bt_devname_cb']
+		nactive = bt_devname_cb.get_active()
 
+		self.curr_dev_mdl['bt_devname_txt'][0] = nactive
+		self.curr_dev_mdl['bt_devname_txt'][3] = self['bt_devname_txt'].get_text()
+
+		bt_devclass_cb = self['bt_devclass_cb']
+		cactive = bt_devclass_cb.get_active()
+
+		self.curr_dev_mdl['bt_devclass_tgb'][0] = cactive
+		self.curr_dev_mdl['bt_devclass_tgb'][3] = self['bt_devclass_tgb'].get_label()
 	#
 	#	device class dialog
 	#
@@ -287,19 +296,16 @@ class BluetoolCfgPanel:
 		sel = minor.get_selection()
 		#print self.devclass_major_store[it][0]
 		store = self.devclass_minor_stores[self.devclass_major_store[it][0]]
-		sel.select_iter(store.iter_nth_child(None,min_id))
-		
+		try: 	sel.select_iter(store.iter_nth_child(None,min_id))
+		except: pass
+
 	def class_ui_to_model(self):
 		dcw = self.devclass_widgets
 		svc   = dcw.get_widget('bt_devclass_service_tv')
 		major = dcw.get_widget('bt_devclass_major_tv')
 		minor = dcw.get_widget('bt_devclass_minor_tv')
 
-		bt_devices_cb = self['bt_devices_cb']
-		idx = bt_devices_cb.get_active()
-		if idx < 0: return
-
-		dev_mdl = self.dev_store[(idx,)][1]
+		if not self.curr_dev_mdl: return
 
 		svc_id = 0;
 		maj_id = 0;
@@ -315,7 +321,7 @@ class BluetoolCfgPanel:
 		model,it = minor.get_selection().get_selected()
 		min_id = model.get_path(it)[0]
 		
-		dev_mdl['bt_devclass_tgb'][3] = hex((svc_id << 16 ) | (maj_id << 8) | (min_id))		
+		self.curr_dev_mdl['bt_devclass_tgb'][3] = hex((svc_id << 16 ) | (maj_id << 8) | (min_id))		
 
 
 	#
@@ -323,23 +329,39 @@ class BluetoolCfgPanel:
 	#
 	def manager_to_model(self):
 		try:
-			devs = self.dbus_manager.ListDevices()
 
-			for devpath in devs:
-				dev = self.sys_bus.get_object('org.bluetool',devpath)
-				hci = dbus.Interface(dev,'org.bluetool.device.hci')
+			for row in self.dev_store:
+
+				if row[2] is None: 
+					continue	# the device is from the conf file
+
+				found = False
+
+				for devpath in self.dev_paths:
+					print row[0], row[2]
+					if row[2]['path'] == devpath:
+						
+						found = True
+						break
+
+				if not found:
+					self.dev_store.remove(row.iter)
+
+			for devpath in self.dev_paths:
+
+				obj = self.sys_bus.get_object('org.bluetool',devpath)
+				hci = dbus.Interface(obj,'org.bluetool.device.hci')
+
+				dev = { 'path':devpath, 'obj':obj, 'hci':hci }
 
 				dev_mdl = self.device_model()
 				stat_mdl = self.status_model()
 
 				up,rx_bts,rx_err,tx_bts,tx_err = hci.GetProperty('stats')
 	
-				print up,rx_bts,rx_err,tx_bts,tx_err
-
 				name = ''
-	
 				address = hci.GetProperty('address')[1]
-	
+
 				if up != 0:
 					name = hci.GetProperty('name')[1]
 
@@ -413,7 +435,20 @@ class BluetoolCfgPanel:
 				if len(name):	lbl = address + ' ( ' + name + ' ) '
 				else:		lbl = address
 
-				self.dev_store.append([address,dev_mdl,dev, False,'',lbl,stat_mdl])
+				# if device already present, just update it with the new model
+
+				found = False
+
+				for row in self.dev_store:
+					if row[0] == address:
+						found = True
+						row[1] = dev_mdl
+						row[5] = lbl
+						row[6] = stat_mdl
+						break
+
+				if not found:
+					self.dev_store.append([address,dev_mdl,dev, False,'',lbl,stat_mdl])
 
 		except dbus.dbus_bindings.DBusException, e:
 			#bt_error_popup('Unable to communicate with device:'+repr(e))
@@ -474,7 +509,21 @@ class BluetoolCfgPanel:
 
 				print active, tristate, optname, val_on, val_off
 
-				if optname == 'name' or optname == 'class': continue
+				if optname == 'name':
+					if active:
+						dev_cfg['name'] = ['"' + val_on + '"']
+					else:
+						if dev_cfg.has_key(optname):
+							dev_cfg.pop(optname)
+					continue
+
+				if optname == 'class':
+					if active:
+						dev_cfg['class'] = [ val_on ]
+					else:
+						if dev_cfg.has_key(optname):
+							dev_cfg.pop(optname)
+					continue
 
 				if tristate:
 					if active == DEFAULT:
@@ -607,8 +656,7 @@ class BluetoolCfgPanel:
 			'bt_lp_park_cb':	[DEFAULT, False, 'lp', 'park', '']
 		}
 		for w in dic.keys():
-			#if dic[w][1]: 
-			self[w].tristate = DEFAULT#dic[w][0]
+			self[w].tristate = DEFAULT
 
 		return dic
 
@@ -644,7 +692,9 @@ class BluetoolCfgPanel:
 			"on_bt_autoinit_cb_clicked"	: self.on_toggle_autoinit,
 			"on_bt_pairing_rb_toggled"	: self.on_toggle_pairing,
 			"on_bt_secmgr_rb_toggled"	: self.on_toggle_secmgr,
-			"on_bt_devname_txt_enter"	: self.on_name_changed,
+			"on_bt_devname_cb_toggled"	: self.on_toggle_name,
+			"on_bt_devname_txt_enter"	: self.on_change_name,
+			"on_bt_devclass_cb_toggled"	: self.on_toggle_devclass,
 			"on_bt_devclass_tgb_toggled"	: self.on_popup_devclass,
 			"on_bt_auth_cb_clicked"		: self.on_toggle_auth,
 			"on_bt_encrypt_cb_clicked"	: self.on_toggle_encrypt,
@@ -747,7 +797,7 @@ class BluetoolCfgPanel:
 					# address # model # dbus_object # save # name # label # stats_mdl
 		self.dev_store = gtk.ListStore(str, object, object, bool, str, str, object)
 					# the order is screwed but it's hard to readjust all indexes at code-time
-					# and unfortunately we can use a dictionary since gtk stores are only lists
+					# and unfortunately we can't use a dictionary since gtk stores are only lists
 
 		dev_cell = gtk.CellRendererText()
 		bt_devices_cb = self['bt_devices_cb']
@@ -773,6 +823,12 @@ class BluetoolCfgPanel:
 			self.sys_bus.get_object('org.bluetool','/org/bluetool/manager'),
 			'org.bluetool.manager'
 		)
+		self.dbus_manager.connect_to_signal('DeviceAdded',self.DeviceAdded)
+		self.dbus_manager.connect_to_signal('DeviceRemoved',self.DeviceRemoved)
+		self.dbus_manager.connect_to_signal('DeviceUp',self.DeviceUp)
+		self.dbus_manager.connect_to_signal('DeviceDown',self.DeviceDown)
+
+		self.dev_paths = self.dbus_manager.ListDevices()
 
 		#
 		#	load configuration directly from devices (via dbus)
@@ -787,11 +843,27 @@ class BluetoolCfgPanel:
 	def __getitem__(self,key):
 		return self.widgets.get_widget(key)
 
-	def add_device(self,address):
-		pass
+	def DeviceAdded(self,address):
 
-	def rem_device(self,address):
-		pass
+		self.dev_paths.append(address)
+		self.manager_to_model()
+		self.model_to_ui()
+
+	def DeviceRemoved(self,address):
+
+		self['bt_devices_cb'].set_active(0)	# Fixme: this is not always necessary
+
+		self.dev_paths.remove(address)
+		self.manager_to_model()
+		self.model_to_ui()
+
+	def DeviceDown(self,address):
+		self.manager_to_model()
+		self.model_to_ui()
+
+	def DeviceUp(self,address):
+		self.manager_to_model()
+		self.model_to_ui()
 
 	def on_close(self,widget):
 		gtk.main_quit()
@@ -822,7 +894,13 @@ class BluetoolCfgPanel:
 		if widget != minor:
 			sel.select_iter(minor_store.get_iter_first())
 
+
+	def on_toggle_devclass(self,widget):
+		if self.updating: return
+		self.ui_to_file()
+
 	def on_change_devclass(self,widget):
+		print 'on_change_devclass'
 		if self.updating: return
 
 		self.class_ui_to_model()
@@ -830,6 +908,18 @@ class BluetoolCfgPanel:
 		self.model_to_file();	# saves it on file
 
 		self['bt_devclass_tgb'].set_active(False)
+
+		dev = self.get_curr_dev()
+		if not dev:
+			return
+
+		bytes = int(self['bt_devclass_tgb'].get_label(), 16)
+		sv = ( bytes >> 16 ) & 0xFF
+		ma = ( bytes >> 8 ) & 0xFF
+		mi = ( bytes ) & 0xFF
+
+		hci = dev['hci']
+		hci.SetProperty('class', dbus.Byte(sv), dbus.Byte(ma), dbus.Byte(mi))
 
 	def on_cancel_devclass(self,wiget):
 		self['bt_devclass_tgb'].set_active(False)
@@ -871,14 +961,51 @@ class BluetoolCfgPanel:
 		if self.updating: return
 		self.ui_to_file()
 
-	def on_name_changed(self,widget):
+	def on_toggle_name(self,widget):
+		self['bt_devname_txt'].set_editable(widget.get_active())
+
+		if self.updating: return
+
+		self.change_name()
+
+	def on_change_name(self,widget):
 		print widget.get_text()
+		if self.updating: return
+
+		self.change_name()
+
+	def get_curr_dev(self):
+		bt_devices_cb = self['bt_devices_cb']
+		idx = bt_devices_cb.get_active()
+		dev = self.dev_store[(idx,)][2]
+		return dev
+
+	def change_name(self):
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		hci.SetProperty('name', self['bt_devname_txt'].get_text())
+
+		#self.manager_to_model()
+		self.ui_to_file()
 
 	def on_toggle_auth(self,widget):
 		if self.updating: return
 
 		if widget == self['bt_auth_enable_cb']:
 			toggle_tristate(self['bt_auth_enable_cb'])
+
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		authb = dbus.Byte(widget.get_active())
+		hci.SetProperty('auth_enable',authb)
 
 		self.ui_to_file()
 		return True
@@ -889,8 +1016,46 @@ class BluetoolCfgPanel:
 		if widget == self['bt_encrypt_enable_cb']:
 			toggle_tristate(self['bt_encrypt_enable_cb'])
 
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		if widget.get_active():
+			encb = dbus.Byte(2)
+		else:
+			encb = dbus.Byte(0)
+
+		hci.SetProperty('encrypt_mode',encb)
+
 		self.ui_to_file()
 		return True
+
+	def change_scan_enable(self):
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		scan = 0
+		if self['bt_iscan_enable_cb'].tristate == DEFAULT:
+			scan |= self.dev_store[(0,)][1]['bt_iscan_enable_cb'][0]
+		else:
+			if self['bt_iscan_enable_cb'].get_active():
+				scan |= HCI_SCAN_INQUIRY
+		
+		if self['bt_pscan_enable_cb'].tristate == DEFAULT:
+			scan |= self.dev_store[(0,)][1]['bt_pscan_enable_cb'][0]
+		else:
+			if self['bt_pscan_enable_cb'].get_active():
+				scan |= HCI_SCAN_PAGE
+
+		hci.SetProperty('scan_enable', dbus.Byte(scan))
+
+		#self.manager_to_model()
+		self.ui_to_file()
 
 	def on_toggle_iscan(self,widget):
 		if self.updating: return
@@ -898,7 +1063,7 @@ class BluetoolCfgPanel:
 		if widget == self['bt_iscan_enable_cb']:
 			toggle_tristate(self['bt_iscan_enable_cb'])
 
-		self.ui_to_file()
+		self.change_scan_enable()
 		return True
 
 
@@ -908,32 +1073,72 @@ class BluetoolCfgPanel:
 		if widget == self['bt_pscan_enable_cb']:
 			toggle_tristate(self['bt_pscan_enable_cb'])
 
-		self.ui_to_file()
+		self.change_scan_enable()
 		return True
+
+	def change_link_mode(self):
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		lm = 0
+		if self['bt_lm_accept_cb'].get_active():
+			lm |= HCI_LM_ACCEPT
+		if self['bt_lm_master_cb'].get_active():
+			lm |= HCI_LM_MASTER
+
+		hci.SetProperty('link_mode', dbus.UInt32(lm))
+
+		#self.manager_to_model()
+		self.ui_to_file()
 
 	def on_toggle_lm_accept(self,widget):
 		if self.updating: return
-		self.ui_to_file()
+		self.change_link_mode()
 
 	def on_toggle_lm_master(self,widget):
 		if self.updating: return
+		self.change_link_mode()
+
+	def change_link_policy(self):
+		dev = self.get_curr_dev()
+		if not dev:
+			self.ui_to_file()
+			return
+
+		hci = dev['hci']
+		lp = 0
+		if self['bt_lp_rswitch_cb'].get_active():
+			lp |= HCI_LP_RSWITCH
+		if self['bt_lp_hold_cb'].get_active():
+			lp |= HCI_LP_HOLD
+		if self['bt_lp_sniff_cb'].get_active():
+			lp |= HCI_LP_SNIFF
+		if self['bt_lp_park_cb'].get_active():
+			lp |= HCI_LP_PARK
+
+		hci.SetProperty('link_policy', dbus.UInt32(lp))
+
+		#self.manager_to_model()
 		self.ui_to_file()
 
 	def on_toggle_lp_rswitch(self,widget):
 		if self.updating: return
-		self.ui_to_file()
+		self.change_link_policy()
 
 	def on_toggle_lp_hold(self,widget):
 		if self.updating: return
-		self.ui_to_file()
+		self.change_link_policy()
 
 	def on_toggle_lp_sniff(self,widget):
 		if self.updating: return
-		self.ui_to_file()
+		self.change_link_policy()
 
 	def on_toggle_lp_park(self,widget):
 		if self.updating: return
-		self.ui_to_file()
+		self.change_link_policy()
 #
 #	program entry point
 #
