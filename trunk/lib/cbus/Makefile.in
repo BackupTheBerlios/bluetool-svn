@@ -159,7 +159,7 @@ CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(libcbus_a_SOURCES)
 DIST_COMMON = README $(srcdir)/Makefile.in AUTHORS COPYING ChangeLog \
-	INSTALL Makefile.am NEWS configure.in
+	INSTALL Makefile.am NEWS configure configure.in
 SOURCES = $(libcbus_a_SOURCES)
 
 all: all-am

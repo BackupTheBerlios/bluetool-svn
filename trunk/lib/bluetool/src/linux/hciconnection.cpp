@@ -14,6 +14,9 @@ Connection::Connection
 	_to(to),
 	_info(info)
 {
+	hci_dbg("handle=%d, link type=%d, enc mode=%d",
+		info.handle, info.link_type, info.encrypt_mode
+	);
 }
 
 Connection::~Connection()

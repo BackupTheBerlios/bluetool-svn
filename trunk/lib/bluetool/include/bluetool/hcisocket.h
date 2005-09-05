@@ -11,7 +11,6 @@ namespace Hci
 
 #include "hcievent.h"
 #include "hcifilter.h"
-#include "hciexception.h"
 
 namespace Hci
 {

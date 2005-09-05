@@ -5,6 +5,10 @@ namespace Bluetool
 {
 static char __buf[256];
 
+/*	TODO: write some DECENT functions to generate path names 
+	for dbus objects
+*/
+
 static const char* _gen_oname( const BdAddr& addr )
 {
 	snprintf(__buf,sizeof(__buf), BTOOL_DEVICES_PATH "%02X_%02X_%02X_%02X_%02X_%02X",
@@ -39,14 +43,14 @@ static const char* _gen_conn_name( const RemoteDevice* endpoint, u16 handle )
 Device::Device( int dev_id )
 :
 	HciDevice(dev_id),
-	DBus::LocalObject(_gen_oname(HciDevice::addr()), DBus::Connection::SystemBus()),
-
-	_services(_get_devpath(HciDevice::addr()), HciDevice::addr())
-{}
+	DBus::LocalObject(_gen_oname(HciDevice::addr()), DBus::Connection::SystemBus())
+{
+	_services = new ServiceDatabase( this->oname(), std::string(""));
+}
 
 Device::~Device()
 {
-	HciDevice::clear_cache();
+	delete _services;
 }
 
 Hci::RemoteDevice* Device::on_new_cache_entry( Hci::RemoteInfo& info )
@@ -65,6 +69,8 @@ RemoteDevice::RemoteDevice( Device* parent, Hci::RemoteInfo& info )
 
 	_parent(parent)
 {
+	_services = new ServiceDatabase( this->oname(), std::string(""));
+
 	DBus::SignalMessage sig("DeviceInRange");
 
 	const char* name = oname().c_str();
@@ -89,6 +95,9 @@ RemoteDevice::~RemoteDevice()
 		DBUS_TYPE_INVALID
 	);
 	_parent->emit_signal(sig);
+
+
+	delete _services;
 }
 
 Hci::Connection* RemoteDevice::on_new_connection( Hci::ConnInfo& info )

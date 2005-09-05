@@ -63,10 +63,6 @@ private:
 
 	virtual void on_purge_cache_entry( Record& ) = 0;
 
-public:
-
-	//SdpEvent on_response; // todo: a virtual method is enough here
-
 private:
 
 	struct Private;

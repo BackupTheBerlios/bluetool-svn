@@ -64,6 +64,7 @@ Connection::Connection( DBusConnection* c )
 :	_connection(c)
 {
 	init();
+	ref();
 }
 
 void Connection::init()
@@ -171,7 +172,6 @@ void Connection::request_name( const char* name, int flags )
 		std::string match = "destination='" + _service_name + "'";
 		this->add_match(match.c_str());
 	}
-
 }
 
 bool Connection::has_name( const char* name )

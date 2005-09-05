@@ -6,11 +6,13 @@ namespace DBus
 {
 
 Error::Error()
+: Dbg::Error( NULL )
 {
 	dbus_error_init(&_error);
 }
 
 Error::Error( DBusError* error )
+: Dbg::Error( NULL )
 {
 	dbus_move_error(error, &_error);
 
@@ -20,18 +22,20 @@ Error::Error( DBusError* error )
 }
 
 Error::Error( const char* name, const char* message )
+: Dbg::Error( NULL )
 {
 	dbus_error_init(&_error);
 	set(name, message);
 }
 
 Error::Error( Message& m )
+: Dbg::Error( NULL )
 {
 	dbus_set_error_from_message(&_error, m._message);
 }
 
-Error::~Error() throw()
-{}
+//Error::~Error() throw()
+//{}
 
 void Error::set( const char* name, const char* message )
 {

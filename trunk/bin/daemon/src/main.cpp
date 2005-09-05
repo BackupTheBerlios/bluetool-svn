@@ -6,11 +6,11 @@
 #include "btool_root_service.h"
 #include "services/btool_service_loader.h"
 
-EventLoop main_loop;
+EventLoop* main_loop;
 
 void niam( int sig )
 {
-	main_loop.leave();
+	main_loop->leave();
 }
 
 int main()
@@ -20,14 +20,17 @@ int main()
 
 	try
 	{
-	//	Bluetool::ServiceLoader::init();
+		EventLoop ml;
+		main_loop = &ml;
 
-		Bluetool::RootService btool_service;
-		Bluetool::DeviceManager	device_manager;
+		Bluetool::ServiceLoader::init();
+		{
+			Bluetool::RootService btool_service;
+			Bluetool::DeviceManager	device_manager;
 
-		main_loop.enter();
-
-	//	Bluetool::ServiceLoader::finalize();
+			main_loop->enter();
+		}
+		Bluetool::ServiceLoader::finalize();
 	}
 	catch( std::exception& e )
 	{

@@ -120,7 +120,7 @@ AM_LDFLAGS = `pkg-config --libs $(PACKAGES)`
 AM_CXXFLAGS = -ggdb -D_DEBUG
 
 noinst_LIBRARIES = libshack.a
-libshack_a_SOURCES = ./src/timeout.cpp ./src/fdnotifier.cpp ./src/eventloop.cpp ./src/debug.cpp ./src/configfile.cpp ./include/common/bytevector.h ./include/common/configfile.h ./include/common/debug.h ./include/common/eventloop.h ./include/common/fdnotifier.h ./include/common/refcnt.h ./include/common/refptr.h ./include/common/socket.h ./include/common/timeout.h ./include/common/types.h ./include/common/unixsocket.h
+libshack_a_SOURCES = ./src/timeout.cpp ./src/fdnotifier.cpp ./src/eventloop.cpp ./src/debug.cpp ./src/configfile.cpp ./src/thread.cpp ./include/common/bytevector.h ./include/common/configfile.h ./include/common/debug.h ./include/common/eventloop.h ./include/common/fdnotifier.h ./include/common/refcnt.h ./include/common/refptr.h ./include/common/socket.h ./include/common/timeout.h ./include/common/types.h ./include/common/unixsocket.h ./include/common/thread.h ./include/common/mutex.h
 subdir = lib/common
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 mkinstalldirs = $(SHELL) $(top_srcdir)/mkinstalldirs
@@ -130,7 +130,8 @@ LIBRARIES = $(noinst_LIBRARIES)
 libshack_a_AR = $(AR) cru
 libshack_a_LIBADD =
 am_libshack_a_OBJECTS = timeout.$(OBJEXT) fdnotifier.$(OBJEXT) \
-	eventloop.$(OBJEXT) debug.$(OBJEXT) configfile.$(OBJEXT)
+	eventloop.$(OBJEXT) debug.$(OBJEXT) configfile.$(OBJEXT) \
+	thread.$(OBJEXT)
 libshack_a_OBJECTS = $(am_libshack_a_OBJECTS)
 
 DEFAULT_INCLUDES =  -I. -I$(srcdir)
@@ -138,7 +139,7 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__depfiles_maybe = depfiles
 @AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/configfile.Po ./$(DEPDIR)/debug.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/eventloop.Po ./$(DEPDIR)/fdnotifier.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/timeout.Po
+@AMDEP_TRUE@	./$(DEPDIR)/thread.Po ./$(DEPDIR)/timeout.Po
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 CXXLD = $(CXX)
@@ -150,7 +151,7 @@ CCLD = $(CC)
 LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
 DIST_SOURCES = $(libshack_a_SOURCES)
 DIST_COMMON = README $(srcdir)/Makefile.in AUTHORS COPYING ChangeLog \
-	INSTALL Makefile.am NEWS configure.in
+	INSTALL Makefile.am NEWS configure configure.in
 SOURCES = $(libshack_a_SOURCES)
 
 all: all-am
@@ -182,6 +183,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/debug.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/eventloop.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fdnotifier.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/thread.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/timeout.Po@am__quote@
 
 .cpp.o:
@@ -315,6 +317,28 @@ configfile.obj: ./src/configfile.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/configfile.Po' tmpdepfile='$(DEPDIR)/configfile.TPo' @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o configfile.obj `if test -f './src/configfile.cpp'; then $(CYGPATH_W) './src/configfile.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/configfile.cpp'; fi`
+
+thread.o: ./src/thread.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT thread.o -MD -MP -MF "$(DEPDIR)/thread.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o thread.o `test -f './src/thread.cpp' || echo '$(srcdir)/'`./src/thread.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/thread.Tpo" "$(DEPDIR)/thread.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/thread.Tpo"; exit 1; \
+@am__fastdepCXX_TRUE@	fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/thread.cpp' object='thread.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/thread.Po' tmpdepfile='$(DEPDIR)/thread.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o thread.o `test -f './src/thread.cpp' || echo '$(srcdir)/'`./src/thread.cpp
+
+thread.obj: ./src/thread.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT thread.obj -MD -MP -MF "$(DEPDIR)/thread.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o thread.obj `if test -f './src/thread.cpp'; then $(CYGPATH_W) './src/thread.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/thread.cpp'; fi`; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/thread.Tpo" "$(DEPDIR)/thread.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/thread.Tpo"; exit 1; \
+@am__fastdepCXX_TRUE@	fi
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/thread.cpp' object='thread.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/thread.Po' tmpdepfile='$(DEPDIR)/thread.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o thread.obj `if test -f './src/thread.cpp'; then $(CYGPATH_W) './src/thread.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/thread.cpp'; fi`
 uninstall-info-am:
 
 ETAGS = etags

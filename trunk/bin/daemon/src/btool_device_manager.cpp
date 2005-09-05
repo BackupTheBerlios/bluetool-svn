@@ -40,7 +40,7 @@ DeviceManager::DeviceManager()
 	/*
 	*/
 	if(!_evt_socket.bind(HCI_DEV_NONE))
-		throw Hci::Exception();
+		throw Dbg::Errno();
 
 	Hci::Filter f;
 	f.set_event(EVT_STACK_INTERNAL);
@@ -70,7 +70,14 @@ DeviceManager::DeviceManager()
 
 			try
 			{
+				bool up = Device::is_up( id );
+				if(!up)
+					Device::up( id );
+
 				RefPtr<Device> rd ( new Device(id) );
+
+				if(up)
+					rd->on_up();
 
 				_devices[id] = rd;
 
@@ -258,7 +265,7 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 
 	int len = _evt_socket.read(buf,sizeof(buf));
 
-	if(len < 0)	throw Hci::Exception();
+	if(len < 0)	throw Dbg::Errno();
 
 	struct __hp
 	{
@@ -290,7 +297,15 @@ void DeviceManager::on_new_event( FdNotifier& fn )
 			{
 				//usleep(1000000); //it seems the device doesn't come up immediately sometimes :(
 
+				bool up = Device::is_up( sd->dev_id );
+				if(!up)
+					Device::up( sd->dev_id );
+
 				RefPtr<Device> rd ( new Device(sd->dev_id) );
+
+				if(up)
+					rd->on_up();
+
 				_devices[sd->dev_id] = rd;
 
 				this->DeviceAdded(rd->oname().c_str());

@@ -32,7 +32,7 @@ public:
 	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
 
 private:
-	ServiceDatabase	_services;
+	ServiceDatabase*	_services;
 };
 
 class RemoteDevice : public HciRemote, public SdpBrowser, public DBus::LocalObject
@@ -45,6 +45,8 @@ public:
 
 private:
 	Device* _parent;
+
+	ServiceDatabase*	_services;
 };
 
 class Connection : public HciConnection, public DBus::LocalObject

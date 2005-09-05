@@ -6,15 +6,21 @@ AC_INIT(src/eventloop.cpp)
 
 #AC_CONFIG_HEADER([config.h])
 
-AM_INIT_AUTOMAKE(shacklib,0.1)
+AM_INIT_AUTOMAKE(libshack,0.1)
 
 # Checks for programs.
 AC_PROG_CXX
 AC_PROG_CC
 AC_PROG_RANLIB
 
+# We're using C++
+AC_LANG([C++])
+
 # Checks for libraries.
 #TODO: need a test for libsigc++
+
+# Check for Boost headers
+AC_CHECK_HEADER(boost/shared_ptr.hpp)
 
 # Checks for header files.
 AC_HEADER_STDC

@@ -41,7 +41,9 @@ HciDevice::HciDevice( int dev_id )
 
 HciDevice::~HciDevice()
 {
-	//clear_cache();
+	/* XXX: this was commented, and I don't remember why
+	*/
+	clear_cache();
 }
 
 void HciDevice::Up( const DBus::CallMessage& msg )
@@ -58,7 +60,7 @@ void HciDevice::Up( const DBus::CallMessage& msg )
 		);
 		_bus.send(reply);
 	}
-	catch(Hci::Exception& e)
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, e.what());
 		_bus.send(err);
@@ -79,7 +81,7 @@ void HciDevice::Down( const DBus::CallMessage& msg )
 		);
 		_bus.send(reply);
 	}
-	catch(Hci::Exception& e)
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR_HCI, e.what());
 		_bus.send(err);
@@ -245,7 +247,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 	}
 	
 	}
-	catch( std::exception& e )
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
 		_bus.send(err);
@@ -395,7 +397,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 	}
 	
 	}
-	catch( std::exception& e )
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
 		_bus.send(err);
@@ -839,7 +841,7 @@ void HciRemote::GetProperty( const DBus::CallMessage& msg )
 		}
 	
 	}
-	catch( std::exception& e )
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
 		_bus.send(err);
@@ -1054,7 +1056,7 @@ void HciConnection::GetProperty( const DBus::CallMessage& msg )
 		}
 	
 	}
-	catch( std::exception& e )
+	catch( Dbg::Error& e )
 	{
 		DBus::ErrorMessage err(msg, BTOOL_ERROR, e.what());
 		_bus.send(err);

@@ -7,14 +7,6 @@ namespace DBus
 
 struct Monitor::Private
 {
-	static void on_new_conn( DBusServer* server, DBusConnection* conn, void* param )
-	{
-		//Private* m = static_cast<Private*>(param);
-		//Connection c = Connection(conn);
-		//m->on_new_connection.emit(c);
-
-		cbus_dbg("incoming connection");
-	}
 
 	static dbus_bool_t on_add_watch( DBusWatch* watch, void* data )
 	{
@@ -272,9 +264,9 @@ void Monitor::init( DBusServer* server )
 	Private* pvt = (Private*)malloc(sizeof(Private));
 	pvt->parent = this;
 
-	dbus_server_set_data(server, pvtslot, pvt, free);
+	dbus_server_set_data(server, pvtslot, pvt, dbus_free);
 
-	dbus_server_set_new_connection_function(server, Private::on_new_conn, pvt, 0);
+	//dbus_server_set_new_connection_function(server, Private::on_new_conn, pvt, 0);
 
 	dbus_server_set_watch_functions( server,
 					 Private::on_add_watch,

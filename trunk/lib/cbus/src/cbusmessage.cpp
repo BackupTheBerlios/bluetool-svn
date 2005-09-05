@@ -16,12 +16,18 @@ Message::Message( DBusMessage* m )
 
 Message::Message( const Message& m )
 {
-	_message = dbus_message_copy(m._message);
+	_message = m._message;
+	ref();
 }
 
 Message::~Message()
 {
 	unref();
+}
+
+Message Message::copy()
+{
+	return Message(dbus_message_copy(_message));
 }
 
 ErrorMessage::ErrorMessage()

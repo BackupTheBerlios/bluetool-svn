@@ -236,6 +236,8 @@ public:
 
 	~Message();
 
+	Message copy();
+
 	inline int type() const;
 
 	inline int serial() const;

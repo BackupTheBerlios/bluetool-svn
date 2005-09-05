@@ -2,7 +2,7 @@
 #define __CBUS_ERROR_H
 
 //#include <string>
-#include <exception>
+#include <common/error.h>
 #include <dbus/dbus.h>
 
 namespace DBus
@@ -14,7 +14,7 @@ class Message;
 namespace DBus
 {
 
-class Error : public std::exception
+class Error : public Dbg::Error
 {
 public:
 	Error();
@@ -25,7 +25,7 @@ public:
 
 	Error( Message& );
 
-	~Error() throw();
+	//~Error() throw();
 
 	const char* what() const throw();
 

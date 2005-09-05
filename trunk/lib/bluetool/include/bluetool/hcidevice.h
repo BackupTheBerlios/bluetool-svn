@@ -24,7 +24,7 @@ namespace Hci
 #include "bdaddr.h"
 #include "hciconnection.h"
 #include "hcisocket.h"
-#include "hciexception.h"
+#include "hcierror.h"
 
 namespace Hci
 {

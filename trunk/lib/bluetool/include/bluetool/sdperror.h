@@ -1,15 +1,15 @@
 #ifndef __SDP_ERROR_H
 #define __SDP_ERROR_H
 
-#include <exception>
-#include <cstring>
+#include <cstring>	//strerror()
 
 #include <common/types.h>
+#include <common/error.h>
 
 namespace Sdp
 {
 
-class Error : public std::exception
+class Error : public Dbg::Error
 {
 public:
 	Error();
@@ -18,10 +18,8 @@ public:
 
 	Error( const char* what );
 
-	virtual const char* what() const throw();
 private:
 	u16 _code;
-	const char* _what;
 };
 
 }//namespace Sdp

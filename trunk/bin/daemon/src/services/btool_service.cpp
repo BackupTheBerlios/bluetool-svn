@@ -1,50 +1,56 @@
-#include <Python.h>
-#include "btool_service.h"
+#include "btool_service_p.h"
 
 namespace Bluetool
 {
 
-struct Service::Private
+static int handle = 0;
+
+static const char* _gen_svc_path( const std::string& dbus_root, const std::string& svc_name )
 {
-	bool started;
+	static char buffer[256] = {0};
 
-	PyObject* module;
-	PyObject* service;
-};
+	handle = ( handle + 1 ) % 255;
 
-Service::Service
-(
-	const std::string& name,
-	const std::string& dbus_root,
-	const std::string& conf_root
-)
-:	/* load interface (common to all services)
-	*/
-	DBus::LocalInterface( BTOOL_SVC_IFACE ), //TODO: create a service-specific interface too
+	snprintf(buffer,sizeof(buffer),"%s%s%02X",dbus_root.c_str(),svc_name.c_str(),handle);
 
-	/* create service object
-	*/
-	DBus::LocalObject
-	(
-		(dbus_root + BTOOL_SVC_SUBDIR + name).c_str(),
-		DBus::Connection::SystemBus()
-	),
+	return buffer;
+}
 
-	/* load configuration file
-	*/
-	settings( (conf_root + name + ".conf").c_str() )
+extern PyThreadState* g_pymaintstate;
+
+Service::Private::Private()
+:		
+	module( NULL ), service( NULL ), settings( NULL )
+{}
+
+Service::Private::~Private()
 {
-	pvt = new Private();
-	pvt->started=false;
-	pvt->module=NULL;
-	pvt->service=NULL;
+	PyEval_AcquireLock();
 
-	/* register standard methods
-	*/
-	register_method( Service, Start );
+	PyThreadState_Swap( g_pymaintstate );
+
+	module = NULL;
+	service = NULL;
+	settings = NULL;
+
+	PyThreadState_Swap( NULL );
+
+	PyEval_ReleaseLock();
+}
+
+Service::Service( const std::string& name, const std::string& dbus_root, const std::string& conf_root )
+:
+	DBus::LocalInterface( BTOOL_SVC_IFACE ),
+
+	DBus::LocalObject( _gen_svc_path(dbus_root,name) , DBus::Connection::SystemBus() ),
+
+	pvt( new Private )
+{
 	register_method( Service, GetOption );
 	register_method( Service, SetOption );
-	register_method( Service, Stop );
+	register_method( Service, Action );
+
+	PyEval_AcquireLock();
 
 	/* add the service path to python's search path
 	*/	
@@ -52,195 +58,283 @@ Service::Service
 	(
 		"import sys\n"
 		"import os\n"
-		"sys.path.append(os.getcwd()+'/services')\n"
+		"sys.path.append(os.getcwd()+'/src/services')\n" 
+		// XXX: put it in a place to define at configure-time
 		//"print sys.path\n"
 	);
 
 	/* load module into embedded interpreter
 	*/
-	PyObject* pname = PyString_FromString(name.c_str());
-	pvt->module = PyImport_Import(pname);
-	Py_DECREF(pname);
+	Py::Obj pname ( PyString_FromString( name.c_str() ) );
+	pvt->module = PyImport_Import( *pname );
 
 	if(!pvt->module)
 	{
 		PyErr_Print();
-		throw "unable to load module";
+		PyEval_ReleaseLock();
+
+		throw Dbg::Error("unable to load module");
 	}
 
 	/* get a dictionary to browse module contents
 	*/
-	PyObject* dict = PyModule_GetDict(pvt->module);
-	std::string service = "bluetool_"+name;
-	PyObject* svc_item = PyDict_GetItemString(dict,service.c_str());
+	PyObject* dict = PyModule_GetDict( *pvt->module );
+
+	std::string service = "bluetool_";
+	service += name;
+
+	PyObject* svc_item = PyDict_GetItemString( dict,service.c_str() );
 
 	if(!svc_item)
 	{
-		Py_DECREF(pvt->module);
-
 		PyErr_Print();
-		throw "unable to load module";
+		PyEval_ReleaseLock();
+
+		throw Dbg::Error("unable to find service class");
 	}
 
 	/* create service instance
 	*/
-	pvt->service = PyObject_CallObject(svc_item, NULL);
+	pvt->service = PyObject_CallObject( svc_item, NULL );
 
 	if(!pvt->service)
 	{
-		Py_DECREF(pvt->module);
-
 		PyErr_Print();
-		throw "unable to create service instance";
+		PyEval_ReleaseLock();
+
+		throw Dbg::Error("unable to create service instance");
 	}
+
+	pvt->settings = PyObject_GetAttrString( *pvt->service, "settings" );
+
+	PyEval_ReleaseLock();
 }
 
 Service::~Service()
 {
-	delete pvt;
-//	conn().disconnect();
 }
 
-
-bool Service::started()
-{
-	return pvt->started;
-}
-
-void Service::GetOption( const DBus::CallMessage& msg )
+void Service::GetOption	( const DBus::CallMessage& msg )
 {
 	try
 	{
+		if(!pvt->settings)
+		{
+			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "unsupported by plugin");
+			conn().send(reply);
+			return;
+		}
 		DBus::MessageIter ri = msg.r_iter();
 
-		const char* key = ri.get_string();
+		char* key = const_cast<char*>(ri.get_string());
 
-		const char* value = settings.get_option(key).c_str();
+		PyObject* value = PyDict_GetItemString( *pvt->settings, key );
 
-		DBus::ReturnMessage reply(msg);
+		if(!value)
+		{
+			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "no such option");
+			conn().send(reply);
+			return;
+		}
+		Py::Obj pstr ( PyObject_Str( value ) );
 
-		reply.append( DBUS_TYPE_STRING, &value,
-			      DBUS_TYPE_INVALID
+		const char* str = PyString_AsString( *pstr );
+
+		DBus::ReturnMessage reply (msg);
+		reply.append( 	DBUS_TYPE_STRING, &(str),
+				DBUS_TYPE_INVALID
 		);
 		conn().send(reply);
 	}
-	catch(...)
-	{}
+	catch( Dbg::Error& e )
+	{
+		DBus::ErrorMessage em (msg, BTOOL_ERROR, e.what());
+		conn().send(em);
+	}
 }
 
-void Service::SetOption( const DBus::CallMessage& msg )
+void Service::SetOption	( const DBus::CallMessage& msg )
 {
 	try
 	{
+		if(!pvt->settings)
+		{
+			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "unsupported by plugin");
+			conn().send(reply);
+			return;
+		}
 		DBus::MessageIter ri = msg.r_iter();
 
-		const char* key = ri.get_string();
+		char* key = const_cast<char*>(ri.get_string());
+		ri++;
+		char* value = const_cast<char*>(ri.get_string());
 
-		const char* value = ri.get_string();
+		Py::Obj pvalue ( PyString_FromString(value) );
 
-		bool res = settings.set_option(key,value);
-
-		DBus::ReturnMessage reply(msg);
-
-		reply.append( DBUS_TYPE_BOOLEAN, &res,
-			      DBUS_TYPE_INVALID
-		);
+		if( PyDict_SetItemString( *pvt->settings, key, *pvalue ) < 0 )
+		{
+			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "can't set option");
+			conn().send(reply);
+			return;
+		}
+		DBus::ReturnMessage reply (msg);
 		conn().send(reply);
 	}
-	catch(...)
-	{}
+	catch( Dbg::Error& e )
+	{
+		DBus::ErrorMessage em (msg, BTOOL_ERROR, e.what());
+		conn().send(em);
+	}
 }
 
-void Service::Start( const DBus::CallMessage& msg )
+void Service::Action	( const DBus::CallMessage& msg )
 {
-	bool res;
+	/*	I can't tell how long it will take to the plugin
+		to accomplish this action, so I have to do what I
+		hate to do, spawn a thread
 
-	if(pvt->started)
+		see ActionThread::run for details
+	*/
+
+	try
 	{
-		res = true;
+		ActionThread* at = new ActionThread(pvt->service,msg);
+
+		/*	if message was valid, run!
+		*/
+		at->start();
 	}
-	else
+	catch( Dbg::Error& e )
 	{
-		PyObject* ret = PyObject_CallMethod(pvt->service, "Start", NULL);
+		DBus::ErrorMessage( msg, BTOOL_ERROR, e.what() );
+		conn().send(msg);
+	}
+}
 
-		if(!PyBool_Check(ret))
+ActionThread::ActionThread( Py::Obj& service, const DBus::CallMessage& call )
+: _service(service), _call(call), _method(NULL), _args(NULL)
+{
+	/*	initialize thread for executing python code
+	*/
+	PyEval_AcquireLock();
+
+	PyInterpreterState* mainistate = g_pymaintstate->interp;
+
+	_thread_state = PyThreadState_New(mainistate);
+
+	PyEval_ReleaseLock();
+
+	/*	parse message
+	*/
+	DBus::MessageIter ri = call.r_iter();
+
+	char* smethod = const_cast<char*>(ri.get_string());
+	++ri;
+
+	_method = PyObject_GetAttrString( *service, smethod );
+
+	if(!_method || !PyCallable_Check(*_method))
+	{
+		PyErr_Print();
+		throw Dbg::Error("action not supported");
+	}
+
+	PyObject* tuple = NULL;
+	int i = 0;
+
+	while( !ri.at_end() )
+	{
+		Py::Obj value( NULL );
+
+		switch( ri.type() )
 		{
-			throw "Start() returned non boolean";
+			/*	you can pass only strings and integers
+				to the plugin, I could make it better
+				in the future, but this should cover
+				the most cases
+			*/
+			case DBUS_TYPE_STRING:
+
+				const char* str = ri.get_string();
+				value = Py_BuildValue("s",str);
+				break;
+
+		/*	case DBUS_TYPE_UINT32:
+			case DBUS_TYPE_INT32:
+
+				int i = r.get_integer();
+				value = Py_BuildValue("i",i);
+				break;
+
+		*/	default:
+
+				Py_XDECREF(tuple);
+				throw Dbg::Error("parameter type not supported");
+		}
+
+		if( !tuple )
+		{
+			tuple = PyTuple_New(1); //an empty tuple
 		}
 		else
 		{
-			if(ret == Py_True)
-			{
-				pvt->started = true;
-				this->ServiceStarted();
-			}
+			_PyTuple_Resize( & tuple, i+1 );
 		}
-		Py_DECREF(ret);
-	}
-	DBus::ReturnMessage reply(msg);
-
-	reply.append( DBUS_TYPE_BOOLEAN, &res,
-		      DBUS_TYPE_INVALID
-	);
-	conn().send(reply);
-}
-
-void Service::Stop( const DBus::CallMessage& msg )
-{
-	bool res;
-
-	if(!pvt->started)
-	{
-		res = true;
-	}
-	else
-	{
-		PyObject* ret = PyObject_CallMethod(pvt->service, "Stop", NULL);
-
-		if(!PyBool_Check(ret))
+		if( !tuple )
 		{
-			throw "Stop() returned non boolean";
+			PyErr_Print();
+			throw Dbg::Error("Unable to allocate parameters");
 		}
-		else
-		{
-			if(ret == Py_True)
-			{
-				pvt->started = false;
-				this->ServiceStopped();
-			}
-		}
-		Py_DECREF(ret);
+		PyTuple_SET_ITEM( &tuple, i, *value );
+		
+		++ri; ++i;
 	}
-	DBus::ReturnMessage reply(msg);
-
-	reply.append( DBUS_TYPE_BOOLEAN, &res,
-		      DBUS_TYPE_INVALID
-	);
-	conn().send(reply);
+	_args = tuple;
 }
 
-void Service::ServiceStarted()
+ActionThread::~ActionThread()
 {
-	const char* sname = oname().c_str();
+	/*	finalize python thread state
+	*/
+	PyEval_AcquireLock();
 
-	DBus::SignalMessage msg (sname, iname().c_str(), "ServiceStarted");
+	PyThreadState_Swap(NULL);
+	PyThreadState_Clear(_thread_state);
+	PyThreadState_Delete(_thread_state);
 
-	msg.append( DBUS_TYPE_STRING, &sname,
-		    DBUS_TYPE_INVALID
-	);
-	conn().send(msg);
+	PyEval_ReleaseLock();
 }
 
-void Service::ServiceStopped()
+void ActionThread::run()
 {
-	const char* sname = oname().c_str();
+	PyEval_AcquireLock();
 
-	DBus::SignalMessage msg (sname, iname().c_str(), "ServiceStopped");
+	PyThreadState_Swap(_thread_state);
 
-	msg.append( DBUS_TYPE_STRING, &sname,
-		    DBUS_TYPE_INVALID
-	);
-	conn().send(msg);
+	/*	jump into python code
+	*/
+	Py::Obj result ( PyObject_CallObject( *_method, *_args ) );
+
+	if(!result)
+	{
+		PyErr_Print();
+	}
+
+	PyThreadState_Swap(NULL);
+
+	PyEval_ReleaseLock();
+
+	/*	parse return value and respond to caller
+	*/
+	DBus::ReturnMessage reply(_call);
+
+	DBus::Connection::SystemBus().send(reply);
 }
+
+void ActionThread::on_end()
+{
+	delete this;	//DON'T allocate this class on stack!
+}
+
 
 }//namespace Bluetool

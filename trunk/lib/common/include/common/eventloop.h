@@ -12,7 +12,7 @@ public:
 
 private:
 
-	bool		_looping;
+	bool	_looping;
 };
 
 #endif//__CBUS_EVENT_LOOP_H

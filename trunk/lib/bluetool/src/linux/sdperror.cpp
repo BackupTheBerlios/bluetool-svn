@@ -6,20 +6,15 @@ namespace Sdp
 {
 
 Error::Error()
-: _code(errno), _what(NULL)
+: Dbg::Error( strerror(errno) ), _code(errno)
 {}
 
 Error::Error( u16 code )
-: _code(code), _what(NULL)
+: Dbg::Error( strerror(code) ), _code(errno)
 {}
 
 Error::Error( const char* what )
-: _code(0), _what(what)
+: Dbg::Error( what ), _code(0)
 {}
-
-const char* Error::what() const throw()
-{
-	return _what ? _what : strerror(_code);
-}
 
 }

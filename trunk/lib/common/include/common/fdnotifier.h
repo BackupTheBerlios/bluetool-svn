@@ -2,8 +2,8 @@
 #define __CBUS_FD_NOTIFIER_H
 
 #include <sys/poll.h>
-#include <list>
 #include <sigc++/sigc++.h>
+#include <list>
 #include "refptr.h"
 
 class FdNotifier;

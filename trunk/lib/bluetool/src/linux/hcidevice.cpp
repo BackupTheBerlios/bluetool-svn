@@ -38,7 +38,7 @@ void LocalDevice::up( int id )
 
 	Socket sock;
 	if( ioctl(sock.handle(), HCIDEVUP, id) < 0 && errno != EALREADY )
-		throw Exception();
+		throw Error();
 
 	/*	don't return until we get an address,
 		we can't create the device without one
@@ -59,6 +59,18 @@ void LocalDevice::on_up()
 {
 	hci_dbg_enter();
 
+	/*	don't return until we get an address,
+		we can't create the device without one
+
+		TODO ?
+	*/
+	unsigned char none[6] = {0};
+	bdaddr_t addr;
+	do
+	{
+		hci_devba(id(), &addr);
+	}while( memcmp(addr.b, none, 6) == 0 );
+
 	pvt->dd.renew(); //since the old control connection socket has become invalid
 	pvt->init();
 
@@ -71,7 +83,7 @@ void LocalDevice::down( int id )
 
 	Socket sock;
 	if( ioctl(sock.handle(), HCIDEVDOWN, id) < 0 )
-		throw Exception();
+		throw Error();
 
 	hci_dbg_leave();
 }
@@ -101,7 +113,7 @@ bool LocalDevice::is_up( int id )
 	hci_dev_info di;
 
 	if(hci_devinfo(id, &di) < 0)
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_UP, &di.flags);
 }
@@ -168,7 +180,7 @@ void LocalDevice::Private::init()
 	hci_dbg_enter();
 
 	if( dd.handle() < 0 || !dd.bind(id) || hci_devba(id,(bdaddr_t*)ba.ptr()) < 0 )
-		throw Exception();
+		throw Error();
 
 	notifier = FdNotifier::create(dd.handle(), POLLIN);
 	notifier->can_read.connect(sigc::mem_fun( this, &LocalDevice::Private::read_ready ));
@@ -179,10 +191,12 @@ void LocalDevice::Private::init()
 	f.set_event(EVT_CMD_STATUS);
 	f.set_event(EVT_CMD_COMPLETE);
 	f.set_event(EVT_INQUIRY_RESULT);
+	f.set_event(EVT_CONN_COMPLETE);
+	f.set_event(EVT_DISCONN_COMPLETE);
 	f.clear_opcode();
 
 	if(!dd.set_filter(f))
-		throw Exception();
+		throw Error();
 
 	/* when the this device object is created
 	   we update the connections/remote tables
@@ -202,7 +216,7 @@ void LocalDevice::Private::init()
 	if(ioctl(dd.handle(), HCIGETCONNLIST, buf))
 	{
 		hci_dbg_leave();
-		throw Exception();
+		throw Error();
 	}
 
 	hci_conn_info* hi = cl->conn_info;
@@ -410,7 +424,7 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 	if(fn.state() & POLLERR || fn.state() & POLLHUP )
 	{
 		flush_queues();
-		//throw Exception();
+		//throw Error();
 		hci_dbg_leave();
 		return;
 	}
@@ -431,7 +445,7 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 			continue;
 
 		flush_queues();
-		throw Exception();
+		throw Error();
 	}
 
 	struct __hp
@@ -505,45 +519,45 @@ void LocalDevice::Private::read_ready( FdNotifier& fn )
 		{
 			switch (hp->eh.evt) {
 
-			case EVT_CMD_STATUS:
-			{
-				if (hp->evt.cs.opcode != pr->ch.opcode)
-					break;
-
-				if (hp->evt.cs.status)
+				case EVT_CMD_STATUS:
 				{
-					pr->hr.event = EVT_CMD_STATUS;
-					pr->hr.rlen = EVT_CMD_STATUS_SIZE;
-					pr->hr.rparam = malloc(pr->hr.rlen);
-					memcpy(&(hp->evt.cs),pr->hr.rparam,pr->hr.rlen);
-					fire_event(pr);
+					if (hp->evt.cs.opcode != pr->ch.opcode)
+						break;
+
+					if (hp->evt.cs.status)
+					{
+						pr->hr.event = EVT_CMD_STATUS;
+						pr->hr.rlen = EVT_CMD_STATUS_SIZE;
+						pr->hr.rparam = malloc(pr->hr.rlen);
+						memcpy(&(hp->evt.cs),pr->hr.rparam,pr->hr.rlen);
+						fire_event(pr);
+					}
+					//TODO: use cs.ncmd for better queueing
+					break;
 				}
-				//TODO: use cs.ncmd for better queueing
-				break;
-			}
-			case EVT_CMD_COMPLETE:
-			{
-				if (hp->evt.cc.opcode != pr->ch.opcode)
-					break;
+				case EVT_CMD_COMPLETE:
+				{
+					if (hp->evt.cc.opcode != pr->ch.opcode)
+						break;
 
-				char* ptr = &hp->evt.ptr + EVT_CMD_COMPLETE_SIZE;
-				len -= EVT_CMD_COMPLETE_SIZE;
+					char* ptr = &hp->evt.ptr + EVT_CMD_COMPLETE_SIZE;
+					len -= EVT_CMD_COMPLETE_SIZE;
 
-				pr->hr.rlen = MIN(len, pr->hr.rlen);
-				pr->hr.rparam = malloc(pr->hr.rlen);
-				memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
-				goto _fire;
-			}
-			default:
-			{
-				if (hp->eh.evt != pr->hr.event)
-					break;
+					pr->hr.rlen = MIN(len, pr->hr.rlen);
+					pr->hr.rparam = malloc(pr->hr.rlen);
+					memcpy(pr->hr.rparam, ptr, pr->hr.rlen);
+					goto _fire;
+				}
+				default:
+				{
+					if (hp->eh.evt != pr->hr.event)
+						break;
 
-				pr->hr.rlen = MIN(len, pr->hr.rlen);
-				pr->hr.rparam = malloc(pr->hr.rlen);
-				memcpy(pr->hr.rparam, &hp->evt.ptr, pr->hr.rlen);
-				goto _fire;
-			}
+					pr->hr.rlen = MIN(len, pr->hr.rlen);
+					pr->hr.rparam = malloc(pr->hr.rlen);
+					memcpy(pr->hr.rparam, &hp->evt.ptr, pr->hr.rlen);
+					goto _fire;
+				}
 
 			}
 		}
@@ -643,7 +657,7 @@ _writev:if( writev(dd.handle(), pr->iobuf, pr->ion) < 0 )
 		else
 		{
 			flush_queues();
-			//throw Exception();
+			//throw Error();
 			return;
 		}
 	}
@@ -978,56 +992,6 @@ void LocalDevice::Private::hci_event_received( Request& req )
 			req.src.remote->on_get_clock_offset(r->status, req.cookie, r->clock_offset);
 			break;
 		}
-		/*	connection
-		*/
-		case EVT_CONN_COMPLETE:
-		{
-			evt_conn_complete* r = (evt_conn_complete*) req.hr.rparam;
-
-			if(r->status)
-			{
-				char straddr[18] = {0};
-
-				ba2str(&(r->bdaddr),straddr);
-
-				RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
-
-				if( i != inquiry_cache.end() )
-				{
-					ConnInfo ci =
-					{
-						r->handle,
-						r->link_type,
-						r->encr_mode
-					};
-					Connection* c = i->second->on_new_connection(ci);
-
-					if(c) i->second->_connections[r->handle] = c;
-				}
-				else
-				{
-					hci_dbg("connection from non cached device %s!",straddr);
-				}
-			}
-//			req.dest_type = Request::REMOTE;
-//			req.dest.rem = i->second;
-			break;
-		}
-		case EVT_DISCONN_COMPLETE:
-		{
-			evt_disconn_complete* r = (evt_disconn_complete*) req.hr.rparam;
-
-			/* find connection object and delete it
-			*/
-			RemoteDevPTable::iterator ri = inquiry_cache.begin();
-			while(ri != inquiry_cache.end())
-			{
-				if(ri->second->remove_connection(r->handle))
-					break;
-				++ri;
-			}
-			break;
-		}
 	}
 
 	hci_dbg_leave();
@@ -1060,10 +1024,61 @@ void LocalDevice::Private::hci_event_inquiry_result( u8 nrsp, inquiry_info* ii )
 
 void LocalDevice::Private::hci_event_conn_complete( evt_conn_complete* evt )
 {
+	if(evt->status)	return;
+
+	char straddr[18] = {0};
+
+	ba2str(&(evt->bdaddr),straddr);
+
+	RemoteDevPTable::iterator i = inquiry_cache.find(straddr);
+
+	RemoteDevice* rptr;
+
+	if( i == inquiry_cache.end() )
+	{
+		/*	the device we're connecting to is not
+			in not in our memory at the moment,
+			we shall create it first :)
+		*/
+		hci_dbg("connection from non cached device %s, creating prototype cache entry...",straddr);
+
+		RemoteInfo ri;
+
+		memset(&ri, 0, sizeof(ri));
+		ri.addr = BdAddr(evt->bdaddr.b);
+		ri.pscan_rpt_mode = 0x02;
+			//default value taken from the BlueZ libs
+
+		rptr = parent->on_new_cache_entry(ri);
+		inquiry_cache[straddr] = rptr;
+	}
+	else
+	{
+		rptr = i->second;
+	}
+
+	ConnInfo ci =
+	{
+		evt->handle,
+		evt->link_type,
+		evt->encr_mode
+	};
+
+	Connection* c = rptr->on_new_connection(ci);
+	if(c) rptr->_connections[evt->handle] = c;
 }
 
 void LocalDevice::Private::hci_event_disconn_complete( evt_disconn_complete* evt )
 {
+	/* find connection object and delete it
+	*/
+	RemoteDevPTable::iterator ri = inquiry_cache.begin();
+	while(ri != inquiry_cache.end())
+	{
+		if(ri->second->remove_connection(evt->handle))
+			break;
+		++ri;
+	}
 }
 
 
@@ -1073,19 +1088,11 @@ void LocalDevice::Private::hci_event_disconn_complete( evt_disconn_complete* evt
 LocalDevice::LocalDevice( const char* dev_name )
 :	pvt( new Private(this, hci_devid(dev_name)) )
 {
-	if(is_up(id())) 
-		pvt->init();
-	else
-		LocalDevice::up( id() );
 }
 
 LocalDevice::LocalDevice( int dev_id )
 :	pvt( new Private(this, dev_id) )
 {
-	if(is_up(id())) 
-		pvt->init();
-	else
-		LocalDevice::up( id() );
 }
 
 LocalDevice::~LocalDevice()
@@ -1263,7 +1270,7 @@ void LocalDevice::get_auth_enable( void* cookie, int timeout )
 /*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_AUTH, &di.flags);
 */
@@ -1305,7 +1312,7 @@ void LocalDevice::get_encrypt_mode( void* cookie, int timeout )
 /*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_ENCRYPT, &di.flags);
 */
@@ -1317,14 +1324,14 @@ void LocalDevice::set_secman_enable( bool enable )
 	int sm = enable ? 1 : 0;
 
 	if( ioctl(pvt->dd.handle(), HCISETSECMGR, sm) < 0 )
-		throw Exception();
+		throw Error();
 }
 bool LocalDevice::get_secman_enable()
 {
 	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_SECMGR, &di.flags);
 }
@@ -1347,7 +1354,7 @@ void LocalDevice::get_scan_enable( void* cookie, int timeout )
 /*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_PSCAN, &di.flags);
 */
@@ -1380,7 +1387,7 @@ void LocalDevice::set_scan_enable( u8 type, void* cookie, int timeout )
 			: ( enable ? SCAN_PAGE			: SCAN_DISABLED ); 
 
 	if( ioctl(pvt->dd.handle(), HCISETSCAN, (ulong)&dr) < 0 )
-		throw Exception();
+		throw Error();
 */
 }
 
@@ -1396,7 +1403,7 @@ void LocalDevice::set_iscan_enable( bool enable, void* cookie, int timeout )
 			: ( enable ? SCAN_INQUIRY		: SCAN_DISABLED ); 
 
 	if( ioctl(pvt->dd.handle(), HCISETSCAN, (ulong)&dr) < 0 )
-		throw Exception();
+		throw Error();
 */
 }
 bool LocalDevice::get_iscan_enable( void* cookie, int timeout )
@@ -1404,7 +1411,7 @@ bool LocalDevice::get_iscan_enable( void* cookie, int timeout )
 /*	hci_dev_info di;
 
 	if( __hci_devinfo(pvt->dd.handle(), id(), &di) < 0 )
-		throw Exception();
+		throw Error();
 
 	return hci_test_bit(HCI_ISCAN, &di.flags);
 */
@@ -1700,7 +1707,14 @@ RemoteDevice::RemoteDevice
 }
 
 RemoteDevice::~RemoteDevice()
-{}
+{
+	ConnPTable::iterator i = _connections.begin();
+	while( i != _connections.end() )
+	{
+		delete i->second;
+		++i;
+	}
+}
 
 
 void* RemoteDevice::data()

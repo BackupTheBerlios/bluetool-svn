@@ -35,15 +35,19 @@ public:
 
 protected:
 
-/*	pure virtuals
-*/
-//	virtual void on_new_connection( Connection& c ) = 0;
+	virtual void on_new_connection( Connection& c ) = 0;
 
 private:
 
 	inline void ref();
 
 	inline void unref();
+
+	void do_dispatch();
+
+private:
+
+	static void on_new_conn_cb( DBusServer* server, DBusConnection* conn, void* param );
 
 private:
 
