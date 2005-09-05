@@ -2,7 +2,7 @@ PACKAGES = sigc++-2.0 dbus-1
 
 AM_CPPFLAGS = -I$(srcdir)/include -I$(srcdir)/../../lib/common/include -I$(srcdir)/../../lib/bluetool/include -I$(srcdir)/../../lib/cbus/include `pkg-config --cflags $(PACKAGES)` $(PYTHON_CPPFLAGS) 
 AM_LDFLAGS =  `pkg-config --libs $(PACKAGES)` $(PYTHON_LDFLAGS) 
-AM_CXXFLAGS = -ggdb -DDBUS_API_SUBJECT_TO_CHANGE -D_DEBUG
+AM_CXXFLAGS = -DDBUS_API_SUBJECT_TO_CHANGE -D_DEBUG
 
 bin_PROGRAMS = bluetool-daemon
 

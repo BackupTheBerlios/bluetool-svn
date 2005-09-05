@@ -50,7 +50,7 @@ CPP = gcc -E
 CPPFLAGS = 
 CXX = g++
 CXXDEPMODE = depmode=gcc3
-CXXFLAGS = -O0
+CXXFLAGS = -O0 -ggdb
 CYGPATH_W = echo
 DEFS = -DPACKAGE_NAME=\"\" -DPACKAGE_TARNAME=\"\" -DPACKAGE_VERSION=\"\" -DPACKAGE_STRING=\"\" -DPACKAGE_BUGREPORT=\"\" -DPACKAGE=\"libcbus\" -DVERSION=\"0.1\" -DHAVE_LIBDBUS_1=1 -DSTDC_HEADERS=1 -DHAVE_SYS_TYPES_H=1 -DHAVE_SYS_STAT_H=1 -DHAVE_STDLIB_H=1 -DHAVE_STRING_H=1 -DHAVE_MEMORY_H=1 -DHAVE_STRINGS_H=1 -DHAVE_INTTYPES_H=1 -DHAVE_STDINT_H=1 -DHAVE_UNISTD_H=1 -DHAVE__BOOL=1 -DHAVE_STDBOOL_H=1 -DHAVE_STDLIB_H=1 -DHAVE_MALLOC=1 
 DEPDIR = .deps
@@ -117,7 +117,7 @@ PACKAGES = sigc++-2.0 dbus-1
 
 AM_CPPFLAGS = -I$(srcdir)/include -I$(srcdir)/../common/include `pkg-config --cflags $(PACKAGES)`
 AM_LDFLAGS = -L$(srcdir)/../common `pkg-config --libs $(PACKAGES)`
-AM_CXXFLAGS = -ggdb -D_DEBUG -DDBUS_API_SUBJECT_TO_CHANGE
+AM_CXXFLAGS = -D_DEBUG -DDBUS_API_SUBJECT_TO_CHANGE
 
 noinst_LIBRARIES = libcbus.a
 libcbus_a_SOURCES = ./include/cbus/cbusdebug.h ./include/cbus/cbuserror.h ./include/cbus/cbusfilter.h ./include/cbus/cbus.h ./include/cbus/cbusinterface.h ./include/cbus/cbusmessage.h ./include/cbus/cbusmonitor.h ./include/cbus/cbusobject.h ./include/cbus/cbusservice.h ./include/cbus/cbusserver.h ./src/cbusservice.cpp ./src/cbusserver.cpp ./src/cbuspendingcall.cpp ./src/cbusobject.cpp ./src/cbusmonitor.cpp ./src/cbusmessage.cpp ./src/cbusinterface.cpp ./src/cbuserror.cpp ./src/cbusconnection.cpp
