@@ -5,6 +5,7 @@
 #include <common/refptr.h>
 #include <cbus/cbus.h>
 #include "../btool_names.h"
+#include "btool_module.h"
 
 namespace Bluetool
 {
@@ -17,7 +18,7 @@ class Service : public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
 
-	Service( const std::string& name, const std::string& dbus_root, const std::string& conf_root );
+	Service( const Module* mod, const std::string& dbus_root, const std::string& conf_root );
 
 	virtual ~Service();
 

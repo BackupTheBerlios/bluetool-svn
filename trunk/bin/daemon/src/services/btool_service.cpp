@@ -1,4 +1,5 @@
 #include "btool_service_p.h"
+#include "btool_module_p.h"
 
 namespace Bluetool
 {
@@ -38,11 +39,11 @@ Service::Private::~Private()
 	PyEval_ReleaseLock();
 }
 
-Service::Service( const std::string& name, const std::string& dbus_root, const std::string& conf_root )
+Service::Service( const Module* mod, const std::string& dbus_root, const std::string& conf_root )
 :
 	DBus::LocalInterface( BTOOL_SVC_IFACE ),
 
-	DBus::LocalObject( _gen_svc_path(dbus_root,name) , DBus::Connection::SystemBus() ),
+	DBus::LocalObject( _gen_svc_path(dbus_root,mod->name()) , DBus::Connection::SystemBus() ),
 
 	pvt( new Private )
 {
@@ -50,52 +51,10 @@ Service::Service( const std::string& name, const std::string& dbus_root, const s
 	register_method( Service, SetOption );
 	register_method( Service, Action );
 
-	PyEval_AcquireLock();
-
-	/* add the service path to python's search path
-	*/	
-	PyRun_SimpleString
-	(
-		"import sys\n"
-		"import os\n"
-		"sys.path.append(os.getcwd()+'/src/services')\n" 
-		// XXX: put it in a place to define at configure-time
-		//"print sys.path\n"
-	);
-
-	/* load module into embedded interpreter
-	*/
-	Py::Obj pname ( PyString_FromString( name.c_str() ) );
-	pvt->module = PyImport_Import( *pname );
-
-	if(!pvt->module)
-	{
-		PyErr_Print();
-		PyEval_ReleaseLock();
-
-		throw Dbg::Error("unable to load module");
-	}
-
-	/* get a dictionary to browse module contents
-	*/
-	PyObject* dict = PyModule_GetDict( *pvt->module );
-
-	std::string service = "bluetool_";
-	service += name;
-
-	PyObject* svc_item = PyDict_GetItemString( dict,service.c_str() );
-
-	if(!svc_item)
-	{
-		PyErr_Print();
-		PyEval_ReleaseLock();
-
-		throw Dbg::Error("unable to find service class");
-	}
 
 	/* create service instance
 	*/
-	pvt->service = PyObject_CallObject( svc_item, NULL );
+	pvt->service = PyObject_CallObject( mod->pvt->modclass, NULL );
 
 	if(!pvt->service)
 	{

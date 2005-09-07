@@ -1,25 +1,31 @@
-#include "btool_service_database.h"
+#include "btool_module_database.h"
 
 namespace Bluetool
 {
 
-ServiceDatabase::ServiceDatabase( const std::string& parent, const std::string& conf_root )
+ModuleDatabase::ModuleDatabase( const std::string& parent, const std::string& conf_root )
 :	
-	DBus::LocalInterface( BTOOL_SERVICEDB_IFACE ),
+	DBus::LocalInterface( BTOOL_MODULEDB_IFACE ),
 
-	DBus::LocalObject( ( parent + BTOOL_SERVICEDB_SUBNAME ).c_str() , DBus::Connection::SystemBus() ),
+	DBus::LocalObject( ( parent + BTOOL_MODULEDB_SUBNAME ).c_str() , DBus::Connection::SystemBus() ),
 
 	_conf_root( conf_root )
 {
-	register_method( ServiceDatabase, ListServices );
-	register_method( ServiceDatabase, LoadService );
-	register_method( ServiceDatabase, UnloadService );
+	register_method( ModuleDatabase, ListModules );
+//	register_method( ModuleDatabase, LoadService );
+//	register_method( ModuleDatabase, UnloadService );
+
+	Module* m = ModuleLoader::load_module("demoservice", oname() + '/', conf_root );
+	if ( m )
+	{
+		_modules.push_back(m);
+	}
 }
 
-ServiceDatabase::~ServiceDatabase()
+ModuleDatabase::~ModuleDatabase()
 {
-	ServicePList::iterator i = _services.begin();
-	while( i != _services.end() )
+	ModulePList::iterator i = _modules.begin();
+	while( i != _modules.end() )
 	{
 		delete *i;
 		++i;
@@ -28,11 +34,12 @@ ServiceDatabase::~ServiceDatabase()
 
 /*	methods
 */
-void ServiceDatabase::ListServices ( const DBus::CallMessage& )
+void ModuleDatabase::ListModules ( const DBus::CallMessage& )
 {
 }
 
-void ServiceDatabase::LoadService ( const DBus::CallMessage& msg )
+#if 0
+void ModuleDatabase::LoadModule ( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -42,7 +49,7 @@ void ServiceDatabase::LoadService ( const DBus::CallMessage& msg )
 
 		Service* svc = ServiceLoader::load_service(svc_name, oname() + '/', _conf_root);
 
-		_services.push_back(svc);
+		_modules.push_back(svc);
 
 		const char* instance_path = svc->oname().c_str();
 
@@ -59,7 +66,7 @@ void ServiceDatabase::LoadService ( const DBus::CallMessage& msg )
 	}
 }
 
-void ServiceDatabase::UnloadService ( const DBus::CallMessage& msg )
+void ModuleDatabase::UnloadModule ( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -69,14 +76,14 @@ void ServiceDatabase::UnloadService ( const DBus::CallMessage& msg )
 
 		bool found = false;
 
-		ServicePList::iterator i = _services.begin();
+		ModulePList::iterator i = _modules.begin();
 
-		while( i != _services.end() )
+		while( i != _modules.end() )
 		{
 			if( (*i)->oname() == path_name )
 			{
 				delete *i;
-				_services.erase(i);
+				_modules.erase(i);
 				found = true;
 				break;
 			}
@@ -101,5 +108,6 @@ void ServiceDatabase::UnloadService ( const DBus::CallMessage& msg )
 		conn().send(em);
 	}
 }
+#endif
 
 }//namespace Bluetool

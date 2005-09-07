@@ -45,6 +45,7 @@ private:
 	FdNotifier*	_notifier;
 	Hci::Socket	_evt_socket;
 	DeviceRTable	_devices;
+	ModuleDatabase	_services;
 };
 
 }//namespace Bluetool

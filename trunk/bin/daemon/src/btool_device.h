@@ -18,7 +18,7 @@ namespace Bluetool
 
 #include "hci/hci_device.h"
 #include "sdp/sdp_browser.h"
-#include "services/btool_service_database.h"
+#include "services/btool_module_database.h"
 
 namespace Bluetool
 {
@@ -32,7 +32,7 @@ public:
 	Hci::RemoteDevice* on_new_cache_entry( Hci::RemoteInfo& );
 
 private:
-	ServiceDatabase*	_services;
+//	ServiceDatabase*	_services;
 };
 
 class RemoteDevice : public HciRemote, public SdpBrowser, public DBus::LocalObject
@@ -46,7 +46,7 @@ public:
 private:
 	Device* _parent;
 
-	ServiceDatabase*	_services;
+//	ServiceDatabase*	_services;
 };
 
 class Connection : public HciConnection, public DBus::LocalObject

@@ -8,7 +8,7 @@ namespace Bluetool
 
 PyThreadState* g_pymaintstate;
 
-void ServiceLoader::init()
+void ModuleLoader::init()
 {
 	Py_InitializeEx(0);
 	PyEval_InitThreads();	//note, this implicitly acquires the lock!
@@ -18,7 +18,7 @@ void ServiceLoader::init()
 	PyEval_ReleaseLock();
 }
 
-void ServiceLoader::finalize()
+void ModuleLoader::finalize()
 {
 	PyEval_AcquireLock();
 
@@ -27,14 +27,24 @@ void ServiceLoader::finalize()
 	Py_Finalize();
 }
 
-Service* ServiceLoader::load_service
+Module* ModuleLoader::load_module
 (
 	const std::string& name,
 	const std::string& dbus_root,
 	const std::string& conf_root
 )
 {
-	return new Service(name,dbus_root,conf_root);
+	return new Module(name,dbus_root,conf_root);
+}
+
+Service* ModuleLoader::load_service
+(
+	const Module* mod,
+	const std::string& dbus_root,
+	const std::string& conf_root
+)
+{
+	return new Service(mod,dbus_root,conf_root);
 }
 
 }//namespace Bluetool

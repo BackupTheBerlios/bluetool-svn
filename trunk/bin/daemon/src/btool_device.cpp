@@ -45,12 +45,12 @@ Device::Device( int dev_id )
 	HciDevice(dev_id),
 	DBus::LocalObject(_gen_oname(HciDevice::addr()), DBus::Connection::SystemBus())
 {
-	_services = new ServiceDatabase( this->oname(), std::string(""));
+//	_services = new ServiceDatabase( this->oname(), std::string(""));
 }
 
 Device::~Device()
 {
-	delete _services;
+//	delete _services;
 }
 
 Hci::RemoteDevice* Device::on_new_cache_entry( Hci::RemoteInfo& info )
@@ -69,7 +69,7 @@ RemoteDevice::RemoteDevice( Device* parent, Hci::RemoteInfo& info )
 
 	_parent(parent)
 {
-	_services = new ServiceDatabase( this->oname(), std::string(""));
+//	_services = new ServiceDatabase( this->oname(), std::string(""));
 
 	DBus::SignalMessage sig("DeviceInRange");
 
@@ -97,13 +97,12 @@ RemoteDevice::~RemoteDevice()
 	_parent->emit_signal(sig);
 
 
-	delete _services;
+//	delete _services;
 }
 
 Hci::Connection* RemoteDevice::on_new_connection( Hci::ConnInfo& info )
 {
 	Connection* c = new Connection(this,info);
-
 	return c;
 }
 

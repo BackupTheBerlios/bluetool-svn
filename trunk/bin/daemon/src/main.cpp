@@ -23,14 +23,14 @@ int main()
 		EventLoop ml;
 		main_loop = &ml;
 
-		Bluetool::ServiceLoader::init();
+		Bluetool::ModuleLoader::init();
 		{
 			Bluetool::RootService btool_service;
 			Bluetool::DeviceManager	device_manager;
 
 			main_loop->enter();
 		}
-		Bluetool::ServiceLoader::finalize();
+		Bluetool::ModuleLoader::finalize();
 	}
 	catch( std::exception& e )
 	{

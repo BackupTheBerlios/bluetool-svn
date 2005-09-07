@@ -6,6 +6,6 @@ AM_CXXFLAGS = -DDBUS_API_SUBJECT_TO_CHANGE -D_DEBUG
 
 bin_PROGRAMS = bluetool-daemon
 
-bluetool_daemon_SOURCES = ./src/hci/hci_device.h ./src/sdp/sdp_browser.h ./src/sdp/sdp_record.h ./src/services/btool_service.h ./src/services/btool_service_loader.h ./src/services/btool_service_database.h ./src/btool_device.h ./src/bluedebug.h ./src/btool_device_manager.h ./src/btool_names.h ./src/btool_root_service.h ./src/hci/hci_device.cpp ./src/sdp/sdp_browser.cpp ./src/sdp/sdp_record.cpp ./src/services/btool_service_loader.cpp ./src/services/btool_service.cpp ./src/services/btool_service_database.cpp ./src/main.cpp ./src/btool_device.cpp ./src/btool_device_manager.cpp ./src/btool_root_service.cpp
+bluetool_daemon_SOURCES = ./src/hci/hci_device.h ./src/sdp/sdp_browser.h ./src/sdp/sdp_record.h ./src/services/btool_service.h ./src/services/btool_service_loader.h ./src/services/btool_module_database.h ./src/services/btool_module.h ./src/btool_device.h ./src/bluedebug.h ./src/btool_device_manager.h ./src/btool_names.h ./src/btool_root_service.h ./src/hci/hci_device.cpp ./src/sdp/sdp_browser.cpp ./src/sdp/sdp_record.cpp ./src/services/btool_service_loader.cpp ./src/services/btool_service.cpp ./src/services/btool_module_database.cpp ./src/services/btool_module.cpp ./src/main.cpp ./src/btool_device.cpp ./src/btool_device_manager.cpp ./src/btool_root_service.cpp
 
 bluetool_daemon_LDADD = ../../lib/common/libshack.a ../../lib/bluetool/libbluetool.a ../../lib/cbus/libcbus.a 

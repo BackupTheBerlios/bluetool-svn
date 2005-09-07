@@ -28,7 +28,9 @@ static BdAddr __get_dev_addr( int dev_id )
 DeviceManager::DeviceManager()
 :		
 	DBus::LocalInterface ( BTOOL_DEVMAN_IFACE ),
-	DBus::LocalObject    ( BTOOL_DEVMAN_PATH, DBus::Connection::SystemBus() )
+	DBus::LocalObject    ( BTOOL_DEVMAN_PATH, DBus::Connection::SystemBus() ),
+
+	_services( this->oname(), std::string("") )
 {
 	/*	export all methods in the interface
 	*/

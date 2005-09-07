@@ -2,19 +2,27 @@
 #define __BTOOL_PYTHON_LOADER_H
 
 #include "btool_service.h"
+#include "btool_module.h"
 
 namespace Bluetool
 {
 
-class ServiceLoader
+class ModuleLoader
 {
 public:
 	static void init();
 	static void finalize();
 
-	static Service* load_service
+	static Module* load_module
 	(
 		const std::string& name,
+		const std::string& dbus_root,
+		const std::string& conf_root
+	);
+
+	static Service* load_service
+	(
+		const Module* mod,
 		const std::string& dbus_root,
 		const std::string& conf_root
 	);

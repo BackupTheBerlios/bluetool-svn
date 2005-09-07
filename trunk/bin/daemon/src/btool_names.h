@@ -24,6 +24,9 @@
 #define BTOOL_SVC_IFACE		BTOOL_ROOT_NAME "service"
 #define BTOOL_SVC_ROOT_NAME	BTOOL_ROOT_NAME "services."
 
+#define BTOOL_MOD_SUBDIR	"modules/"
+#define BTOOL_MOD_IFACE		BTOOL_ROOT_NAME "module"
+
 #define	BTOOL_REM_SUBDIR	"remote/"
 #define BTOOL_REM_IFACE		BTOOL_ROOT_NAME "remote"
 #define BTOOL_REM_ROOT_NAME	BTOOL_REM_IFACE "."
@@ -38,7 +41,7 @@
 
 #define BTOOL_SDP_IFACE		BTOOL_DEVICE_ROOT_NAME "sdp"
 
-#define BTOOL_SERVICEDB_SUBNAME	"/servicedb"
-#define BTOOL_SERVICEDB_IFACE	BTOOL_ROOT_NAME "servicedb"
+#define BTOOL_MODULEDB_SUBNAME	"/modules"
+#define BTOOL_MODULEDB_IFACE	BTOOL_ROOT_NAME "modules"
 
 #endif//__BTOOL_NAMES_H
