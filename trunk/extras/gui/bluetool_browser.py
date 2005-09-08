@@ -15,7 +15,6 @@ if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
 
 #from bluetool_dbus import BluetoolManagerProxy, BluetoolDeviceProxy
 
-
 #
 #	error reporting
 #
@@ -289,7 +288,7 @@ class BrowserModel:
 
 		obj = { 'path': rec_path, 'rec': rec }
 
-		name = '<Unkown>'
+		name = '<Unknown>'
 		desc = ''
 		try:
 			name = rec.GetServiceName()

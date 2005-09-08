@@ -59,6 +59,19 @@ void LocalDevice::on_up()
 {
 	hci_dbg_enter();
 
+	/*	this is rendundant and already in on_down(), but
+		when resuming from hibernation we get on_up()
+		without a previous on_down() and the device ends up
+		initialized TWICE, this means a FdNotifier for the
+		dead socket will still be around and this will cause
+		us a deadlock since anyone will be reading from there
+		to unlock it
+	*/
+	pvt->dd.close();
+
+	FdNotifier::destroy(pvt->notifier);
+	pvt->notifier = NULL;
+
 	/*	don't return until we get an address,
 		we can't create the device without one
 
