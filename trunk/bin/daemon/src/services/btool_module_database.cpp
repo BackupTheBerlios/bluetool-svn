@@ -15,10 +15,26 @@ ModuleDatabase::ModuleDatabase( const std::string& parent, const std::string& co
 //	register_method( ModuleDatabase, LoadService );
 //	register_method( ModuleDatabase, UnloadService );
 
-	Module* m = ModuleLoader::load_module("demoservice", oname() + '/', conf_root );
-	if ( m )
+	DIR* d = opendir("../../extras/modules"); //todo: never hardcode paths
+
+	if( d )
 	{
-		_modules.push_back(m);
+		dirent* entry;
+		while( (entry = readdir(d)) != NULL )
+		{
+			int l = strlen(entry->d_name);
+
+			if ( strcmp(entry->d_name + l - 3, ".py") )
+				continue;
+
+			std::string mname (entry->d_name, 0, l-3 );
+
+			Module* m = ModuleLoader::load_module(mname.c_str(), oname() + '/', conf_root );
+
+			if ( m )
+				_modules.push_back(m);
+		}
+		closedir( d );
 	}
 }
 
@@ -34,8 +50,23 @@ ModuleDatabase::~ModuleDatabase()
 
 /*	methods
 */
-void ModuleDatabase::ListModules ( const DBus::CallMessage& )
+void ModuleDatabase::ListModules ( const DBus::CallMessage& msg )
 {
+	DBus::ReturnMessage reply (msg);
+
+	DBus::MessageIter wi = reply.w_iter();
+	DBus::MessageIter ai = wi.new_array(DBUS_TYPE_STRING);
+
+	ModulePList::iterator i = _modules.begin();
+	while( i != _modules.end() )
+	{
+		const char* p = (*i)->oname().c_str();
+		ai.append_string(p);
+		++i;
+	}
+
+	wi.close_container(ai);
+	conn().send(reply);
 }
 
 #if 0

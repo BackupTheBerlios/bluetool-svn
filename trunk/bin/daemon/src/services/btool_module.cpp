@@ -26,8 +26,11 @@ Module::Module( const std::string& name, const std::string& dbus_root, const std
 
 	pvt( new Private )
 {
+	pvt->name = name;
+
 //	register_method( Module, Instance );
 	register_method( Module, Description );
+	register_method( Module, Name );
 
 	PyEval_AcquireLock();
 
@@ -37,8 +40,8 @@ Module::Module( const std::string& name, const std::string& dbus_root, const std
 	(
 		"import sys\n"
 		"import os\n"
-		"sys.path.append(os.getcwd()+'/src/services')\n" 
-		// XXX: put it in a place to define at configure-time
+		"sys.path.append(os.getcwd()+'/../../extras/modules')\n" 
+		// XXX: put it in a path to define at configure-time
 		//"print sys.path\n"
 	);
 
@@ -108,6 +111,16 @@ void Module::Description ( const DBus::CallMessage& msg )
 		DBus::ErrorMessage em (msg, BTOOL_ERROR, e.what());
 		conn().send(em);
 	}
+}
+
+void Module::Name ( const DBus::CallMessage& msg )
+{
+	const char* sname = name().c_str();
+
+	DBus::ReturnMessage reply (msg);
+	reply.append( DBUS_TYPE_STRING, &(sname), DBUS_TYPE_INVALID );
+
+	conn().send(reply);
 }
 
 }//namespace Bluetool

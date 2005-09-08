@@ -27,6 +27,8 @@ public:
 
 	void Description ( const DBus::CallMessage& );
 
+	void Name ( const DBus::CallMessage& );
+
 private:
 
 	struct Private;

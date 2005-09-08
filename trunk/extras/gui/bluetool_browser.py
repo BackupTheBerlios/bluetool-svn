@@ -8,7 +8,7 @@ import gtk
 import gtk.glade
 import gobject
 import dbus
-
+import pdb
 
 if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
@@ -174,6 +174,26 @@ class BrowserModel:
 		for devpath in devices:
 			self.sig_DeviceAdded(devpath)
 
+		#
+		#	list modules
+		#
+		self.module_store = gtk.ListStore(str,str,str)
+
+		moddb = dbus.Interface(
+			self.bus.get_object('org.bluetool', '/org/bluetool/manager/modules'), 				'org.bluetool.modules'
+		)
+
+		mods = moddb.ListModules()
+
+		print mods
+
+		for mod_path in mods:
+			mod = dbus.Interface(
+				self.bus.get_object('org.bluetool', mod_path), 'org.bluetool.module'
+			)
+			self.module_store.append([mod_path, mod.Name(), mod.Description()])
+
+
 	#
 	#	signal handlers
 	#
@@ -231,7 +251,7 @@ class BrowserModel:
 
 		obj = { 'path': devpath, 'dev': dev, 'hci': hci, 'sdp': sdp }
 
-		service_store = gtk.TreeStore(object,str)
+		service_store = gtk.TreeStore(object,str,str)
 
 		newit = inquiry_store.append(
 			None, [ obj, service_store, '', '', None, 0, None ]
@@ -270,15 +290,20 @@ class BrowserModel:
 		obj = { 'path': rec_path, 'rec': rec }
 
 		name = '<Unkown>'
+		desc = ''
 		try:
 			name = rec.GetServiceName()
-			svc_id = rec.GetClassIdList()
-			print svc_id
-			name += ' ('+ SVC_CLASS_IDS[svc_id[0]] +')'
 		except:
 			pass
 
-		service_store.append(None,[obj, name])
+		try:
+			svc_id = rec.GetClassIdList()
+			#print svc_id
+			desc = SVC_CLASS_IDS[svc_id[0]]
+		except:
+			pass
+
+		service_store.append(None,[obj, name, desc])
 
 		#print rec.GetClassIdList()
 		#try: print rec.GetProtocolDescList()
@@ -310,8 +335,11 @@ class BrowserModel:
 	#
 	#	functions to be called by the controller (the gui, actually)
 	#
-	def get_model(self):
+	def get_device_store(self):
 		return self.device_store
+
+	def get_module_store(self):
+		return self.module_store
 
 
 class BluetoolBrowser:
@@ -347,7 +375,7 @@ class BluetoolBrowser:
 		bt_progress_box.show_all()
 
 		self.bmodel = bmodel
-		self.bmodel.get_model().connect('row-inserted', self.on_devices_change)
+		self.bmodel.get_device_store().connect('row-changed', self.on_devices_change)
 
 		self.curr_inquiry_store = None
 
@@ -356,7 +384,7 @@ class BluetoolBrowser:
 		#
 		tc = gtk.CellRendererText()
 		bt_devices_cb = self['bt_devices_cb']
-		bt_devices_cb.set_model(self.bmodel.get_model())
+		bt_devices_cb.set_model(self.bmodel.get_device_store())
 		bt_devices_cb.pack_start(tc, True)
 		bt_devices_cb.add_attribute(tc, 'text', 4)
 
@@ -401,36 +429,70 @@ class BluetoolBrowser:
 		bt_services_tv.append_column(svcname_col)
 
 		svcdesc_cell = gtk.CellRendererText()
-		svcdesc_col = gtk.TreeViewColumn('Service description')
+		svcdesc_col = gtk.TreeViewColumn('Class')
+		svcdesc_col.pack_start(svcdesc_cell,True)
+		svcdesc_col.add_attribute(svcdesc_cell,'text', 2)
 
 		bt_services_tv.append_column(svcdesc_col)
 
 		self.empty_svc_store = gtk.ListStore(str,str)
 		bt_services_tv.set_model(self.empty_svc_store)
 
-		if len(self.bmodel.get_model()):
+		if len(self.bmodel.get_device_store()):
 			bt_devices_cb.set_active(0)
+
+		#
+		#	and now, the module list
+		#
+		bt_pi_pan = self['bt_pi_pan']
+		bt_pi_pan.set_position(250)
+
+		bt_installedpi_tv = self['bt_installedpi_tv']
+
+		modname_cell = gtk.CellRendererText()
+		modname_col = gtk.TreeViewColumn('Module name')
+		modname_col.pack_start(modname_cell, True)
+		modname_col.add_attribute(modname_cell, 'text', 1)
+
+		bt_installedpi_tv.append_column(modname_col)
+
+		moddesc_cell = gtk.CellRendererText()
+		moddesc_col = gtk.TreeViewColumn('Description')
+		moddesc_col.pack_start(moddesc_cell, True)
+		moddesc_col.add_attribute(moddesc_cell, 'text', 2)
+
+		bt_installedpi_tv.append_column(moddesc_col)
+
+		bt_installedpi_tv.set_model(self.bmodel.get_module_store())
+
 
 	def on_close(self,window,event):
 		gtk.main_quit()
 
-	def on_devices_change(self,*args):
-		print args
+	def on_devices_change(self,model,path,it):
 
-		if not len(self.bmodel.get_model()): return
+		self.curr_inquiry_store = model[it][1]
+
+		bt_discovered_tv = self['bt_discovered_tv']
+		bt_discovered_tv.set_model(self.curr_inquiry_store)
+
+		bt_services_tv = self['bt_services_tv']
+		bt_services_tv.set_model(self.empty_svc_store)
 
 		bt_devices_cb = self['bt_devices_cb']
+
 		if bt_devices_cb.get_active() < 0:
 			bt_devices_cb.set_active(0)
 
 	def on_select_device(self,widget):
+
 		if self.inquiry_running: return True
 
 		bt_devices_cb = self['bt_devices_cb']
 		idx = bt_devices_cb.get_active()
 		if idx < 0: return
 
-		self.curr_inquiry_store = self.bmodel.get_model()[(idx)][1]
+		self.curr_inquiry_store = self.bmodel.get_device_store()[(idx)][1]
 
 		bt_discovered_tv = self['bt_discovered_tv']
 		bt_discovered_tv.set_model(self.curr_inquiry_store)
@@ -534,8 +596,8 @@ class BluetoolBrowser:
 		idx = bt_devices_cb.get_active()
 		if idx < 0: return
 
-		it = self.bmodel.get_model().iter_nth_child(None,idx)
-		obj = self.bmodel.get_model()[it][0]
+		it = self.bmodel.get_device_store().iter_nth_child(None,idx)
+		obj = self.bmodel.get_device_store()[it][0]
 
 		if self.inquiry_running:
 			bt_popup_error(['Operation already in progress'])
@@ -555,7 +617,7 @@ class BluetoolBrowser:
 		self.inquiry_running = False
 
 	def on_stop_inquiry(self,widget):
-		if not len(self.bmodel.get_model()): return
+		if not len(self.bmodel.get_device_store()): return
 
 		bt_devices_cb = self['bt_devices_cb']
 		idx = bt_devices_cb.get_active()
@@ -563,8 +625,8 @@ class BluetoolBrowser:
 
 		self.inquiry_running = False
 
-		it = self.bmodel.get_model().iter_nth_child(None,idx)
-		obj = self.bmodel.get_model()[it][0]
+		it = self.bmodel.get_device_store().iter_nth_child(None,idx)
+		obj = self.bmodel.get_device_store()[it][0]
 		obj['hci'].CancelInquiry(
 			reply_handler=self.inquiry_canceled_hdl, error_handler=bt_popup_error)
 
