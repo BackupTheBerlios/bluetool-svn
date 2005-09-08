@@ -4,7 +4,7 @@
 
 #include <common/eventloop.h>
 #include "btool_root_service.h"
-#include "services/btool_service_loader.h"
+#include "services/btool_module_loader.h"
 
 EventLoop* main_loop;
 

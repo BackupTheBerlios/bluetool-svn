@@ -1,10 +1,10 @@
-#ifndef __BTOOL_SERVICE_P_H
-#define __BTOOL_SERVICE_P_H
+#ifndef __BTOOL_INSTANCE_P_H
+#define __BTOOL_INSTANCE_P_H
 
 #include <Python.h>
 #include <common/thread.h>
 #include <list>
-#include "btool_service.h"
+#include "btool_instance.h"
 #include "py_obj.h"
 #include "../bluedebug.h"
 
@@ -37,7 +37,7 @@ private:
 	DBus::CallMessage _call;
 };
 
-struct Service::Private
+struct Instance::Private
 {
 	/* members
 	*/
@@ -53,4 +53,4 @@ struct Service::Private
 
 }//namespace Bluetool
 
-#endif//__BTOOL_SERVICE_P_H
+#endif//__BTOOL_INSTANCE_P_H

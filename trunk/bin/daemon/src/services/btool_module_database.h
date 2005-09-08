@@ -5,8 +5,8 @@
 #include <dirent.h>
 #include <cbus/cbus.h>
 #include "btool_module.h"
-#include "btool_service.h"
-#include "btool_service_loader.h"
+#include "btool_instance.h"
+#include "btool_module_loader.h"
 #include "../btool_names.h"
 
 namespace Bluetool
@@ -44,7 +44,7 @@ public:
 private:
 
 	ModulePList	_modules;
-	ServicePList	_instances;
+	InstancePList	_instances;
 	std::string	_conf_root;
 };
 

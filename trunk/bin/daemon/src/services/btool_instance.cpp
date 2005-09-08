@@ -1,4 +1,4 @@
-#include "btool_service_p.h"
+#include "btool_instance_p.h"
 #include "btool_module_p.h"
 
 namespace Bluetool
@@ -19,12 +19,12 @@ static const char* _gen_svc_path( const std::string& dbus_root, const std::strin
 
 extern PyThreadState* g_pymaintstate;
 
-Service::Private::Private()
+Instance::Private::Private()
 :		
 	module( NULL ), service( NULL ), settings( NULL )
 {}
 
-Service::Private::~Private()
+Instance::Private::~Private()
 {
 	PyEval_AcquireLock();
 
@@ -39,7 +39,7 @@ Service::Private::~Private()
 	PyEval_ReleaseLock();
 }
 
-Service::Service( const Module* mod, const std::string& dbus_root, const std::string& conf_root )
+Instance::Instance( const Module* mod, const std::string& dbus_root, const std::string& conf_root )
 :
 	DBus::LocalInterface( BTOOL_SVC_IFACE ),
 
@@ -47,9 +47,9 @@ Service::Service( const Module* mod, const std::string& dbus_root, const std::st
 
 	pvt( new Private )
 {
-	register_method( Service, GetOption );
-	register_method( Service, SetOption );
-	register_method( Service, Action );
+	register_method( Instance, GetOption );
+	register_method( Instance, SetOption );
+	register_method( Instance, Action );
 
 
 	/* create service instance
@@ -69,11 +69,11 @@ Service::Service( const Module* mod, const std::string& dbus_root, const std::st
 	PyEval_ReleaseLock();
 }
 
-Service::~Service()
+Instance::~Instance()
 {
 }
 
-void Service::GetOption	( const DBus::CallMessage& msg )
+void Instance::GetOption	( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -112,7 +112,7 @@ void Service::GetOption	( const DBus::CallMessage& msg )
 	}
 }
 
-void Service::SetOption	( const DBus::CallMessage& msg )
+void Instance::SetOption	( const DBus::CallMessage& msg )
 {
 	try
 	{
@@ -146,7 +146,7 @@ void Service::SetOption	( const DBus::CallMessage& msg )
 	}
 }
 
-void Service::Action	( const DBus::CallMessage& msg )
+void Instance::Action	( const DBus::CallMessage& msg )
 {
 	/*	I can't tell how long it will take to the plugin
 		to accomplish this action, so I have to do what I

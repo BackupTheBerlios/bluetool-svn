@@ -23,7 +23,7 @@ public:
 
 	const std::string& name() const;
 
-	//void Instance ( const DBus::CallMessage& );
+	void Instance ( const DBus::CallMessage& );
 
 	void Description ( const DBus::CallMessage& );
 
@@ -35,7 +35,7 @@ private:
 
 	RefPtr<Private> pvt;
 
-friend class Service;
+friend class Instance;
 };
 
 }//namespace Bluetool

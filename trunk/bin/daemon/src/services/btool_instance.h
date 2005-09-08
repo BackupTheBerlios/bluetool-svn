@@ -1,5 +1,5 @@
-#ifndef __BTOOL_SERVICE_H
-#define __BTOOL_SERVICE_H
+#ifndef __BTOOL_INSTANCE_H
+#define __BTOOL_INSTANCE_H
 
 #include <common/error.h>
 #include <common/refptr.h>
@@ -10,17 +10,17 @@
 namespace Bluetool
 {
 
-class Service;
+class Instance;
 
-typedef std::list<Service*> ServicePList;
+typedef std::list<Instance*> InstancePList;
 
-class Service : public DBus::LocalInterface, public DBus::LocalObject
+class Instance : public DBus::LocalInterface, public DBus::LocalObject
 {
 public:
 
-	Service( const Module* mod, const std::string& dbus_root, const std::string& conf_root );
+	Instance( const Module* mod, const std::string& dbus_root, const std::string& conf_root );
 
-	virtual ~Service();
+	virtual ~Instance();
 
 	void GetOption		( const DBus::CallMessage& );
 	void SetOption		( const DBus::CallMessage& );
@@ -35,4 +35,4 @@ private:
 
 }//namespace Bluetool
 
-#endif//__BTOOL_SERVICE_H
+#endif//__BTOOL_INSTANCE_H

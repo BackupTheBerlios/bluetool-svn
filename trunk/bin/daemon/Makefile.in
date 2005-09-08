@@ -130,7 +130,7 @@ AM_CXXFLAGS = -DDBUS_API_SUBJECT_TO_CHANGE -D_DEBUG
 
 bin_PROGRAMS = bluetool-daemon
 
-bluetool_daemon_SOURCES = ./src/hci/hci_device.h ./src/sdp/sdp_browser.h ./src/sdp/sdp_record.h ./src/services/btool_service.h ./src/services/btool_service_loader.h ./src/services/btool_module_database.h ./src/services/btool_module.h ./src/btool_device.h ./src/bluedebug.h ./src/btool_device_manager.h ./src/btool_names.h ./src/btool_root_service.h ./src/hci/hci_device.cpp ./src/sdp/sdp_browser.cpp ./src/sdp/sdp_record.cpp ./src/services/btool_service_loader.cpp ./src/services/btool_service.cpp ./src/services/btool_module_database.cpp ./src/services/btool_module.cpp ./src/main.cpp ./src/btool_device.cpp ./src/btool_device_manager.cpp ./src/btool_root_service.cpp
+bluetool_daemon_SOURCES = ./src/hci/hci_device.h ./src/sdp/sdp_browser.h ./src/sdp/sdp_record.h ./src/services/btool_instance.h ./src/services/btool_module_loader.h ./src/services/btool_module_database.h ./src/services/btool_module.h ./src/btool_device.h ./src/bluedebug.h ./src/btool_device_manager.h ./src/btool_names.h ./src/btool_root_service.h ./src/hci/hci_device.cpp ./src/sdp/sdp_browser.cpp ./src/sdp/sdp_record.cpp ./src/services/btool_module_loader.cpp ./src/services/btool_instance.cpp ./src/services/btool_module_database.cpp ./src/services/btool_module.cpp ./src/main.cpp ./src/btool_device.cpp ./src/btool_device_manager.cpp ./src/btool_root_service.cpp
 
 bluetool_daemon_LDADD = ../../lib/common/libshack.a ../../lib/bluetool/libbluetool.a ../../lib/cbus/libcbus.a 
 subdir = .
@@ -142,8 +142,8 @@ bin_PROGRAMS = bluetool-daemon$(EXEEXT)
 PROGRAMS = $(bin_PROGRAMS)
 
 am_bluetool_daemon_OBJECTS = hci_device.$(OBJEXT) sdp_browser.$(OBJEXT) \
-	sdp_record.$(OBJEXT) btool_service_loader.$(OBJEXT) \
-	btool_service.$(OBJEXT) btool_module_database.$(OBJEXT) \
+	sdp_record.$(OBJEXT) btool_module_loader.$(OBJEXT) \
+	btool_instance.$(OBJEXT) btool_module_database.$(OBJEXT) \
 	btool_module.$(OBJEXT) main.$(OBJEXT) btool_device.$(OBJEXT) \
 	btool_device_manager.$(OBJEXT) btool_root_service.$(OBJEXT)
 bluetool_daemon_OBJECTS = $(am_bluetool_daemon_OBJECTS)
@@ -156,11 +156,11 @@ depcomp = $(SHELL) $(top_srcdir)/../../depcomp
 am__depfiles_maybe = depfiles
 @AMDEP_TRUE@DEP_FILES = ./$(DEPDIR)/btool_device.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/btool_device_manager.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/btool_instance.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/btool_module.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/btool_module_database.Po \
+@AMDEP_TRUE@	./$(DEPDIR)/btool_module_loader.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/btool_root_service.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/btool_service.Po \
-@AMDEP_TRUE@	./$(DEPDIR)/btool_service_loader.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/hci_device.Po ./$(DEPDIR)/main.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/sdp_browser.Po \
 @AMDEP_TRUE@	./$(DEPDIR)/sdp_record.Po
@@ -255,11 +255,11 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_device.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_device_manager.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_instance.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_module.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_module_database.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_module_loader.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_root_service.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_service.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/btool_service_loader.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/hci_device.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sdp_browser.Po@am__quote@
@@ -353,49 +353,49 @@ sdp_record.obj: ./src/sdp/sdp_record.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o sdp_record.obj `if test -f './src/sdp/sdp_record.cpp'; then $(CYGPATH_W) './src/sdp/sdp_record.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/sdp/sdp_record.cpp'; fi`
 
-btool_service_loader.o: ./src/services/btool_service_loader.cpp
-@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_service_loader.o -MD -MP -MF "$(DEPDIR)/btool_service_loader.Tpo" \
-@am__fastdepCXX_TRUE@	  -c -o btool_service_loader.o `test -f './src/services/btool_service_loader.cpp' || echo '$(srcdir)/'`./src/services/btool_service_loader.cpp; \
-@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_service_loader.Tpo" "$(DEPDIR)/btool_service_loader.Po"; \
-@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_service_loader.Tpo"; exit 1; \
+btool_module_loader.o: ./src/services/btool_module_loader.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_module_loader.o -MD -MP -MF "$(DEPDIR)/btool_module_loader.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o btool_module_loader.o `test -f './src/services/btool_module_loader.cpp' || echo '$(srcdir)/'`./src/services/btool_module_loader.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_module_loader.Tpo" "$(DEPDIR)/btool_module_loader.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_module_loader.Tpo"; exit 1; \
 @am__fastdepCXX_TRUE@	fi
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_service_loader.cpp' object='btool_service_loader.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_service_loader.Po' tmpdepfile='$(DEPDIR)/btool_service_loader.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_module_loader.cpp' object='btool_module_loader.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_module_loader.Po' tmpdepfile='$(DEPDIR)/btool_module_loader.TPo' @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_service_loader.o `test -f './src/services/btool_service_loader.cpp' || echo '$(srcdir)/'`./src/services/btool_service_loader.cpp
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_module_loader.o `test -f './src/services/btool_module_loader.cpp' || echo '$(srcdir)/'`./src/services/btool_module_loader.cpp
 
-btool_service_loader.obj: ./src/services/btool_service_loader.cpp
-@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_service_loader.obj -MD -MP -MF "$(DEPDIR)/btool_service_loader.Tpo" \
-@am__fastdepCXX_TRUE@	  -c -o btool_service_loader.obj `if test -f './src/services/btool_service_loader.cpp'; then $(CYGPATH_W) './src/services/btool_service_loader.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_service_loader.cpp'; fi`; \
-@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_service_loader.Tpo" "$(DEPDIR)/btool_service_loader.Po"; \
-@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_service_loader.Tpo"; exit 1; \
+btool_module_loader.obj: ./src/services/btool_module_loader.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_module_loader.obj -MD -MP -MF "$(DEPDIR)/btool_module_loader.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o btool_module_loader.obj `if test -f './src/services/btool_module_loader.cpp'; then $(CYGPATH_W) './src/services/btool_module_loader.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_module_loader.cpp'; fi`; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_module_loader.Tpo" "$(DEPDIR)/btool_module_loader.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_module_loader.Tpo"; exit 1; \
 @am__fastdepCXX_TRUE@	fi
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_service_loader.cpp' object='btool_service_loader.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_service_loader.Po' tmpdepfile='$(DEPDIR)/btool_service_loader.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_module_loader.cpp' object='btool_module_loader.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_module_loader.Po' tmpdepfile='$(DEPDIR)/btool_module_loader.TPo' @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_service_loader.obj `if test -f './src/services/btool_service_loader.cpp'; then $(CYGPATH_W) './src/services/btool_service_loader.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_service_loader.cpp'; fi`
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_module_loader.obj `if test -f './src/services/btool_module_loader.cpp'; then $(CYGPATH_W) './src/services/btool_module_loader.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_module_loader.cpp'; fi`
 
-btool_service.o: ./src/services/btool_service.cpp
-@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_service.o -MD -MP -MF "$(DEPDIR)/btool_service.Tpo" \
-@am__fastdepCXX_TRUE@	  -c -o btool_service.o `test -f './src/services/btool_service.cpp' || echo '$(srcdir)/'`./src/services/btool_service.cpp; \
-@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_service.Tpo" "$(DEPDIR)/btool_service.Po"; \
-@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_service.Tpo"; exit 1; \
+btool_instance.o: ./src/services/btool_instance.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_instance.o -MD -MP -MF "$(DEPDIR)/btool_instance.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o btool_instance.o `test -f './src/services/btool_instance.cpp' || echo '$(srcdir)/'`./src/services/btool_instance.cpp; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_instance.Tpo" "$(DEPDIR)/btool_instance.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_instance.Tpo"; exit 1; \
 @am__fastdepCXX_TRUE@	fi
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_service.cpp' object='btool_service.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_service.Po' tmpdepfile='$(DEPDIR)/btool_service.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_instance.cpp' object='btool_instance.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_instance.Po' tmpdepfile='$(DEPDIR)/btool_instance.TPo' @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_service.o `test -f './src/services/btool_service.cpp' || echo '$(srcdir)/'`./src/services/btool_service.cpp
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_instance.o `test -f './src/services/btool_instance.cpp' || echo '$(srcdir)/'`./src/services/btool_instance.cpp
 
-btool_service.obj: ./src/services/btool_service.cpp
-@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_service.obj -MD -MP -MF "$(DEPDIR)/btool_service.Tpo" \
-@am__fastdepCXX_TRUE@	  -c -o btool_service.obj `if test -f './src/services/btool_service.cpp'; then $(CYGPATH_W) './src/services/btool_service.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_service.cpp'; fi`; \
-@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_service.Tpo" "$(DEPDIR)/btool_service.Po"; \
-@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_service.Tpo"; exit 1; \
+btool_instance.obj: ./src/services/btool_instance.cpp
+@am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_instance.obj -MD -MP -MF "$(DEPDIR)/btool_instance.Tpo" \
+@am__fastdepCXX_TRUE@	  -c -o btool_instance.obj `if test -f './src/services/btool_instance.cpp'; then $(CYGPATH_W) './src/services/btool_instance.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_instance.cpp'; fi`; \
+@am__fastdepCXX_TRUE@	then mv -f "$(DEPDIR)/btool_instance.Tpo" "$(DEPDIR)/btool_instance.Po"; \
+@am__fastdepCXX_TRUE@	else rm -f "$(DEPDIR)/btool_instance.Tpo"; exit 1; \
 @am__fastdepCXX_TRUE@	fi
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_service.cpp' object='btool_service.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_service.Po' tmpdepfile='$(DEPDIR)/btool_service.TPo' @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	source='./src/services/btool_instance.cpp' object='btool_instance.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	depfile='$(DEPDIR)/btool_instance.Po' tmpdepfile='$(DEPDIR)/btool_instance.TPo' @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_service.obj `if test -f './src/services/btool_service.cpp'; then $(CYGPATH_W) './src/services/btool_service.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_service.cpp'; fi`
+@am__fastdepCXX_FALSE@	$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o btool_instance.obj `if test -f './src/services/btool_instance.cpp'; then $(CYGPATH_W) './src/services/btool_instance.cpp'; else $(CYGPATH_W) '$(srcdir)/./src/services/btool_instance.cpp'; fi`
 
 btool_module_database.o: ./src/services/btool_module_database.cpp
 @am__fastdepCXX_TRUE@	if $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT btool_module_database.o -MD -MP -MF "$(DEPDIR)/btool_module_database.Tpo" \

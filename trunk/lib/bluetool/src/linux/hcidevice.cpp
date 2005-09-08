@@ -69,13 +69,16 @@ void LocalDevice::on_up()
 	*/
 	pvt->dd.close();
 
-	FdNotifier::destroy(pvt->notifier);
-	pvt->notifier = NULL;
+	if(pvt->notifier)
+	{
+		FdNotifier::destroy(pvt->notifier);
+		pvt->notifier = NULL;
+	}
 
 	/*	don't return until we get an address,
 		we can't create the device without one
 
-		TODO ?
+		FIXME ?
 	*/
 	unsigned char none[6] = {0};
 	bdaddr_t addr;

@@ -1,6 +1,6 @@
 #include <Python.h>
 
-#include "btool_service_loader.h"
+#include "btool_module_loader.h"
 #include "../bluedebug.h"
 
 namespace Bluetool
@@ -37,14 +37,14 @@ Module* ModuleLoader::load_module
 	return new Module(name,dbus_root,conf_root);
 }
 
-Service* ModuleLoader::load_service
+Instance* ModuleLoader::instantiate
 (
 	const Module* mod,
 	const std::string& dbus_root,
 	const std::string& conf_root
 )
 {
-	return new Service(mod,dbus_root,conf_root);
+	return new Instance(mod,dbus_root,conf_root);
 }
 
 }//namespace Bluetool

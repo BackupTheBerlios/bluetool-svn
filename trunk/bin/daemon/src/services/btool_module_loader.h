@@ -1,7 +1,7 @@
 #ifndef __BTOOL_PYTHON_LOADER_H
 #define __BTOOL_PYTHON_LOADER_H
 
-#include "btool_service.h"
+#include "btool_instance.h"
 #include "btool_module.h"
 
 namespace Bluetool
@@ -20,7 +20,7 @@ public:
 		const std::string& conf_root
 	);
 
-	static Service* load_service
+	static Instance* instantiate
 	(
 		const Module* mod,
 		const std::string& dbus_root,
