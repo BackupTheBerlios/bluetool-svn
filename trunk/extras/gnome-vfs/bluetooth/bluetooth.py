@@ -319,7 +319,7 @@ class bluetooth_method:
 		return handle
 
 	def vfs_read_directory(self, handle, file_info, context):
-		print "vfs_read_directory", handle, file_info, context
+		print "vfs_read_directory", handle, context
 		handle.read_dir(file_info)
 
 	def vfs_close_directory(self, handle, context):
@@ -328,7 +328,7 @@ class bluetooth_method:
 		del (handle)
 
 	def vfs_get_file_info(self, uri, file_info, options, context):
-		print "vfs_get_file_info", uri, file_info, options, context
+		print "vfs_get_file_info", uri, options, context
 
 		print uri.short_name
 
@@ -337,14 +337,14 @@ class bluetooth_method:
 		handle.get_file_info(file_info)
 
 	def vfs_get_file_info_from_handle(self,	handle, file_info, options, context):
-		print "vfs_get_file_info_from_handle", handle, file_info, options, context
+		print "vfs_get_file_info_from_handle", handle, options, context
 		handle.get_file_info(file_info)
 
 	def vfs_check_same_fs(self, uri_a, uri_b, context):
 		raise gnomevfs.NotSupportedError
 
 	def vfs_open(self, uri, mode, context):
-		print "------------------------> vfs_open", uri
+		print "vfs_open", uri
 
 		try:
 
@@ -352,8 +352,6 @@ class bluetooth_method:
 
 		except Exception, e:
 			traceback.print_exc()
-		#handle = DeviceFileHandle(uri)
-		#return handle
 
 	def vfs_close(self, handle, context):
 		print "vfs_close", handle
