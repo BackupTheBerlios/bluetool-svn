@@ -8,10 +8,12 @@ import gtk
 import gtk.glade
 import gobject
 import dbus
-import bluetool
 
 if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
+
+sys.path.append(os.path.abspath(os.getcwd()+'/../common'))	#TODO
+import bluetool
 
 #from bluetool_dbus import BluetoolManagerProxy, BluetoolDeviceProxy
 
@@ -37,7 +39,6 @@ def bt_empty_handler(list):
 	pass
 
 def major_to_pixmap(major):
-
 	return gtk.gdk.pixbuf_new_from_file( bluetool.devclass2icon(major) )
 
 class BrowserModel:

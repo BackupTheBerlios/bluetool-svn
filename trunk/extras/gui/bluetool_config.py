@@ -15,6 +15,9 @@ from bluetool_parser import BluezConfig
 if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
 
+sys.path.append(os.path.abspath(os.getcwd()+'/../common'))	#TODO
+import bluetool
+
 HCID_CONF_PATH = './hcid.conf'
 
 #

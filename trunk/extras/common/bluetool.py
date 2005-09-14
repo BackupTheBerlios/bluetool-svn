@@ -3,6 +3,8 @@
 	useful for using the Bluetool DBUS api from python'''
 
 import dbus
+import os
+import sys
 
 try:	import dbus.glib
 except	ImportError:
@@ -71,7 +73,7 @@ HCI_DEVICE_CLASSES = [
 	)
 ]
 
-def devclass2icon( major ):
+def devclass2icon(major):
 
 	pixmaps = [ 
 		'bt-logo.png', #Unknown
@@ -83,7 +85,8 @@ def devclass2icon( major ):
 		'btdevice-imaging.png', 
 		'bt-logo.png' #Wearable
 	];
-	return pixmaps[major]
+	mod = sys.modules[__name__]
+	return os.path.dirname(mod.__file__)+'/'+pixmaps[major]
 
 #
 #	service class ID list ( from the Bluetooth assigned numbers )

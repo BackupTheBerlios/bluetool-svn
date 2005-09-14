@@ -9,10 +9,13 @@ import os
 import traceback
 import pdb
 
+sys.path.append(os.path.abspath(os.getcwd()+'/../../common'))	#TODO
+import bluetool
+
 sys_bus = dbus.SystemBus()
 
 #
-#	the idea of faking .desktop files comes from gnome-vfs in gnome-bluetooth, (c) Edd Dumbill
+#	the idea of faking .desktop files comes from gnome-vfs in Edd Dumbill's gnome-bluetooth
 #
 
 DEVICE_FILE_PROTOTYPE = \
