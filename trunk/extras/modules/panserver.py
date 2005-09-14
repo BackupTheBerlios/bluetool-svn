@@ -1,6 +1,6 @@
 
 
-class bluetool_bnep:
+class bluetool_panserver:
 	'''Provides wireless networking to other devices'''
 
 	def __init__(self):

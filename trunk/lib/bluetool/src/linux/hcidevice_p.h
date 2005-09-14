@@ -44,17 +44,17 @@ struct LocalDevice::Private
 	void req_timedout( Timeout& );
 	void flush_queues();
 
-	void link_ctl_cmd_complete( Request& );
+	u16 link_ctl_cmd_complete( Request& );
 
-	void link_policy_cmd_complete( Request& );
+	u16 link_policy_cmd_complete( Request& );
 
-	void host_ctl_cmd_complete( Request& );
+	u16 host_ctl_cmd_complete( Request& );
 
-	void info_param_cmd_complete( Request& );
+	u16 info_param_cmd_complete( Request& );
 
-	void status_param_cmd_complete( Request& );
+	u16 status_param_cmd_complete( Request& );
 
-	void hci_event_received( Request& );
+	u16 hci_event_received( Request& );
 
 	void hci_event_inquiry_result( u8 nrsp, inquiry_info* evt );
 	void hci_event_conn_complete( evt_conn_complete* evt );

@@ -20,9 +20,9 @@
 
 #define BTOOL_DEVICES_PATH	BTOOL_ROOT_PATH "devices/"
 
-#define BTOOL_SVC_SUBDIR	"services/"
-#define BTOOL_SVC_IFACE		BTOOL_ROOT_NAME "service"
-#define BTOOL_SVC_ROOT_NAME	BTOOL_ROOT_NAME "services."
+#define BTOOL_INST_SUBDIR	"instances/"
+#define BTOOL_INST_IFACE	BTOOL_ROOT_NAME "instance"
+//#define BTOOL_INST_ROOT_NAME	BTOOL_ROOT_NAME "services."
 
 #define BTOOL_MOD_SUBDIR	"modules/"
 #define BTOOL_MOD_IFACE		BTOOL_ROOT_NAME "module"

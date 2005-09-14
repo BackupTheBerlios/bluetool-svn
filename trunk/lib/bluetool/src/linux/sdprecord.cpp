@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include <bluetool/sdperror.h>
 #include <bluetool/sdpdebug.h>
 #include "sdprecord_p.h"

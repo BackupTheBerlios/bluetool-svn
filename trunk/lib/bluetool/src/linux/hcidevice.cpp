@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include "hcidevice_p.h"
 
 namespace Hci
@@ -709,27 +710,27 @@ void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 			{
 				case OGF_LINK_CTL:
 				{
-					link_ctl_cmd_complete(*req);
+					error = bt_error(link_ctl_cmd_complete(*req));
 					break;
 				}
 				case OGF_LINK_POLICY:
 				{
-					link_policy_cmd_complete(*req);
+					error = bt_error(link_policy_cmd_complete(*req));
 					break;
 				}
 				case OGF_HOST_CTL:
 				{
-					host_ctl_cmd_complete(*req);
+					error = bt_error(host_ctl_cmd_complete(*req));
 					break;
 				}
 				case OGF_INFO_PARAM:
 				{
-					info_param_cmd_complete(*req);
+					error = bt_error(info_param_cmd_complete(*req));
 					break;
 				}
 				case OGF_STATUS_PARAM:
 				{
-					status_param_cmd_complete(*req);
+					error = bt_error(status_param_cmd_complete(*req));
 					break;
 				}
 			};						
@@ -750,7 +751,7 @@ void LocalDevice::Private::fire_event( RefPtr<Request>& req )
 		*/
 		default:
 		{
-			hci_event_received(*req);
+			error = bt_error(hci_event_received(*req));
 		}
 	}
 
@@ -772,7 +773,7 @@ nodel:	hci_dbg_leave();
 	return;
 }
 
-void LocalDevice::Private::link_ctl_cmd_complete( Request& req )
+u16 LocalDevice::Private::link_ctl_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
@@ -790,29 +791,37 @@ void LocalDevice::Private::link_ctl_cmd_complete( Request& req )
 					fire_event(*ri);
 				++ri;
 			}
-			parent->on_inquiry_cancel(0,req.cookie);
-			break;
+			parent->on_inquiry_cancel(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_PERIODIC_INQUIRY:
 		{
-			parent->on_periodic_inquiry_started(0,req.cookie);
-			break;
+			parent->on_periodic_inquiry_started(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_EXIT_PERIODIC_INQUIRY:
 		{
-			parent->on_periodic_inquiry_cancel(0,req.cookie);
-			break;
+			parent->on_periodic_inquiry_cancel(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 	}
 
 	hci_dbg_leave();
+	return 0;
 }
 
-void LocalDevice::Private::link_policy_cmd_complete( Request& req )
+u16 LocalDevice::Private::link_policy_cmd_complete( Request& req )
 {
+	return 0;
 }
 
-void LocalDevice::Private::host_ctl_cmd_complete( Request& req )
+u16 LocalDevice::Private::host_ctl_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
@@ -822,69 +831,89 @@ void LocalDevice::Private::host_ctl_cmd_complete( Request& req )
 		{
 			u8* enable = (u8*) req.hr.rparam;
 
-			parent->on_get_auth_enable(0, req.cookie, *enable);
-			break;
+			parent->on_get_auth_enable(req.cookie, *enable);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_READ_ENCRYPT_MODE:
 		{
 			u8* mode = (u8*) req.hr.rparam;
 
-			parent->on_get_encrypt_mode(0, req.cookie, *mode);
-			break;
+			parent->on_get_encrypt_mode(req.cookie, *mode);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_READ_SCAN_ENABLE:
 		{
 			read_scan_enable_rp* r = (read_scan_enable_rp*) req.hr.rparam;
 
-			parent->on_get_scan_enable(r->status,req.cookie,r->enable);
-			break;
+			parent->on_get_scan_enable(req.cookie,r->enable);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_READ_LOCAL_NAME:
 		{
 			read_local_name_rp* r = (read_local_name_rp*) req.hr.rparam;
 
-			parent->on_get_name(r->status,req.cookie,(char*)r->name);
-			break;
+			parent->on_get_name(req.cookie,(char*)r->name);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_READ_CLASS_OF_DEV:
 		{
 			read_class_of_dev_rp* r = (read_class_of_dev_rp*) req.hr.rparam;
 
-			parent->on_get_class(r->status,req.cookie,r->dev_class);
-			break;
+			parent->on_get_class(req.cookie,r->dev_class);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_READ_VOICE_SETTING:
 		{
 			read_voice_setting_rp* r = (read_voice_setting_rp*) req.hr.rparam;
 
-			parent->on_get_voice_setting(r->status,req.cookie,r->voice_setting);
-			break;
+			parent->on_get_voice_setting(req.cookie,r->voice_setting);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_WRITE_AUTH_ENABLE:
 		{
-			parent->on_set_auth_enable(0,req.cookie);
-			break;
+			parent->on_set_auth_enable(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_WRITE_ENCRYPT_MODE:
 		{
-			parent->on_set_encrypt_mode(0,req.cookie);
-			break;
+			parent->on_set_encrypt_mode(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_WRITE_SCAN_ENABLE:
 		{
-			parent->on_set_scan_enable(0,req.cookie);
-			break;
+			parent->on_set_scan_enable(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 		case OCF_CHANGE_LOCAL_NAME:
 		{
-			parent->on_set_name(0,req.cookie);
-			break;
+			parent->on_set_name(req.cookie);
+
+			hci_dbg_leave();
+			return 0;
 		}
 	}
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::info_param_cmd_complete( Request& req )
+u16 LocalDevice::Private::info_param_cmd_complete( Request& req )
 {
 	hci_dbg_enter();
 
@@ -897,8 +926,10 @@ void LocalDevice::Private::info_param_cmd_complete( Request& req )
 			char local_addr[18] = {0};
 			ba2str(&(r->bdaddr),local_addr);
 
-			parent->on_get_address(r->status,req.cookie,local_addr);
-			break;
+			parent->on_get_address(req.cookie,local_addr);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_READ_LOCAL_VERSION:
 		{
@@ -910,7 +941,6 @@ void LocalDevice::Private::info_param_cmd_complete( Request& req )
 
 			parent->on_get_version
 			(
-				r->status,
 				req.cookie,
 				hci_ver,
 				r->hci_rev,
@@ -918,7 +948,8 @@ void LocalDevice::Private::info_param_cmd_complete( Request& req )
 				r->lmp_subver,
 				comp_str
 			);
-			break;
+			hci_dbg_leave();
+			return r->status;
 		}
 		case OCF_READ_LOCAL_FEATURES:
 		{
@@ -926,21 +957,69 @@ void LocalDevice::Private::info_param_cmd_complete( Request& req )
 
 			char* lmp_feat = lmp_featurestostr(r->features," ",0);
 
-			parent->on_get_features(r->status,req.cookie,lmp_feat);
+			parent->on_get_features(req.cookie,lmp_feat);
 			 //todo: format this field as a string array
 
 			free(lmp_feat);
-			break;
+
+			hci_dbg_leave();
+			return r->status;
 		}
 	}
 	hci_dbg_leave();
 }
 
-void LocalDevice::Private::status_param_cmd_complete( Request& req )
+u16 LocalDevice::Private::status_param_cmd_complete( Request& req )
 {
+	hci_dbg_enter();
+
+	switch(req.hr.ocf)
+	{
+		case OCF_READ_LINK_QUALITY:
+		{
+			read_link_quality_rp* r = (read_link_quality_rp*) req.hr.rparam;
+
+			RemoteDevPTable::iterator ri = inquiry_cache.begin();
+			while( ri != inquiry_cache.end() )
+			{
+				const ConnPTable& ct = ri->second->connections();
+				ConnPTable::const_iterator ci = ct.find(r->handle);
+				if( ci != ct.end() )
+				{
+					Connection* cp = ci->second;
+					cp->on_get_link_quality(req.cookie,r->link_quality);
+					break;
+				}
+				++ri;
+			}
+			hci_dbg_leave();
+			return r->status;
+		}
+		case OCF_READ_RSSI:
+		{
+			read_rssi_rp* r = (read_rssi_rp*) req.hr.rparam;
+
+			RemoteDevPTable::iterator ri = inquiry_cache.begin();
+			while( ri != inquiry_cache.end() )
+			{
+				const ConnPTable& ct = ri->second->connections();
+				ConnPTable::const_iterator ci = ct.find(r->handle);
+				if( ci != ct.end() )
+				{
+					Connection* cp = ci->second;
+					cp->on_get_rssi(req.cookie,r->rssi);
+					break;
+				}
+				++ri;
+			}
+			hci_dbg_leave();
+			return r->status;
+		}
+	}
+	hci_dbg_leave();	
 }
 
-void LocalDevice::Private::hci_event_received( Request& req )
+u16 LocalDevice::Private::hci_event_received( Request& req )
 {
 	hci_dbg_enter();
 
@@ -952,8 +1031,9 @@ void LocalDevice::Private::hci_event_received( Request& req )
 
 			//u16* status = (u16*) req.hr.rparam;
 
-			parent->on_inquiry_complete(0, req.cookie);
-			break;
+			parent->on_inquiry_complete(req.cookie);
+			hci_dbg_leave();
+			return 0;
 		}
 		/*	remote commands
 		*/
@@ -968,13 +1048,14 @@ void LocalDevice::Private::hci_event_received( Request& req )
 
 			if( i != inquiry_cache.end() )
 			{
-				i->second->on_get_name(r->status, req.cookie, (char*)r->name);
+				i->second->on_get_name(req.cookie, (char*)r->name);
 			}
 			else
 			{
 				hci_dbg("remote name %s from non cached device %s!",r->name, straddr);
 			}
-			break;
+			hci_dbg_leave();
+			return r->status;
 		}		
 		case EVT_READ_REMOTE_VERSION_COMPLETE:
 		{
@@ -985,32 +1066,37 @@ void LocalDevice::Private::hci_event_received( Request& req )
 
 			req.src.remote->on_get_version
 			(
-				r->status,
 				req.cookie,
 				lmp_ver,
 				r->lmp_subver,
 				comp_str
 			);
-			break;
+			hci_dbg_leave();
+			return r->status;
 		}
 		case EVT_READ_REMOTE_FEATURES_COMPLETE:
 		{
 			evt_read_remote_features_complete* r = (evt_read_remote_features_complete*) req.hr.rparam;
 
 			char* lmp_feat = lmp_featurestostr(r->features," ",0);
-			req.src.remote->on_get_features(r->status, req.cookie, lmp_feat);
-			break;
+			req.src.remote->on_get_features(req.cookie, lmp_feat);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 		case EVT_READ_CLOCK_OFFSET_COMPLETE:
 		{
 			evt_read_clock_offset_complete* r = (evt_read_clock_offset_complete*) req.hr.rparam;
 
-			req.src.remote->on_get_clock_offset(r->status, req.cookie, r->clock_offset);
-			break;
+			req.src.remote->on_get_clock_offset(req.cookie, r->clock_offset);
+
+			hci_dbg_leave();
+			return r->status;
 		}
 	}
 
 	hci_dbg_leave();
+	return 0; //todo: return an appropriate error
 }
 
 void LocalDevice::Private::hci_event_inquiry_result( u8 nrsp, inquiry_info* ii )
@@ -1583,7 +1669,7 @@ void LocalDevice::get_address( void* cookie, int timeout )
 		char local_addr[18] = {0};
 		ba2str((bdaddr_t*)pvt->ba.ptr(),local_addr);
 
-		on_get_address(0,cookie,local_addr);
+		on_get_address(cookie,local_addr);
 		on_after_event(0,cookie);
 		return;
 	}
@@ -1787,7 +1873,7 @@ void RemoteDevice::get_address( void* cookie, int timeout )
 {
 	const char* address = addr().to_string().c_str();
 
-	this->on_get_address(0, cookie, address);
+	this->on_get_address(cookie, address);
 	_local_dev->on_after_event(0,cookie);
 	return;
 }
@@ -1797,7 +1883,7 @@ void RemoteDevice::get_class( void* cookie, int timeout )
 {
 	u8* cls = _info.dev_class;
 
-	this->on_get_class(0, cookie, cls);
+	this->on_get_class(cookie, cls);
 	_local_dev->on_after_event(0,cookie);
 	return;
 }

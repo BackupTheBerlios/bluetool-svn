@@ -1,4 +1,5 @@
 #include "btool_module_database.h"
+#include "../bluedebug.h"
 
 namespace Bluetool
 {
@@ -12,6 +13,10 @@ ModuleDatabase::ModuleDatabase( const std::string& parent, const std::string& co
 	_conf_root( conf_root )
 {
 	register_method( ModuleDatabase, ListModules );
+	register_method( ModuleDatabase, ReloadModules );
+	register_method( ModuleDatabase, SearchClassId );
+	register_method( ModuleDatabase, NewInstance );
+	register_method( ModuleDatabase, RemoveInstance );
 //	register_method( ModuleDatabase, LoadService );
 //	register_method( ModuleDatabase, UnloadService );
 
@@ -29,10 +34,17 @@ ModuleDatabase::ModuleDatabase( const std::string& parent, const std::string& co
 
 			std::string mname (entry->d_name, 0, l-3 );
 
-			Module* m = ModuleLoader::load_module(mname.c_str(), oname() + '/', conf_root );
+			try
+			{
+				Module* m =
+					ModuleLoader::load_module(mname.c_str(), oname() + '/', conf_root );
 
-			if ( m )
 				_modules.push_back(m);
+			}
+			catch( Dbg::Error& e )
+			{
+				blue_dbg("Error loading module '%s': %s", mname.c_str(), e.what());
+			}
 		}
 		closedir( d );
 	}
@@ -40,11 +52,17 @@ ModuleDatabase::ModuleDatabase( const std::string& parent, const std::string& co
 
 ModuleDatabase::~ModuleDatabase()
 {
-	ModulePList::iterator i = _modules.begin();
-	while( i != _modules.end() )
+	ModulePList::iterator mi = _modules.begin();
+	while( mi != _modules.end() )
 	{
-		delete *i;
-		++i;
+		delete *mi;
+		++mi;
+	}
+	InstancePList::iterator ii = _instances.begin();
+	while( ii != _instances.end() )
+	{
+		delete *ii;
+		++ii;
 	}
 }
 
@@ -69,6 +87,127 @@ void ModuleDatabase::ListModules ( const DBus::CallMessage& msg )
 	conn().send(reply);
 }
 
+void ModuleDatabase::ReloadModules ( const DBus::CallMessage& msg )
+{
+	DBus::ErrorMessage em(msg, BTOOL_ERROR, "Unsupported");
+	conn().send(em);
+}
+
+void ModuleDatabase::SearchClassId ( const DBus::CallMessage& msg )
+{
+	try
+	{
+		DBus::MessageIter ri = msg.r_iter();
+
+		u16 cid = ri.get_uint16();
+
+		Module* m = NULL;
+
+		ModulePList::iterator i = _modules.begin();
+		while( i != _modules.end() )
+		{
+			if( (*i)->provides_service(cid) )
+			{
+				m = (*i);
+				break;
+			}
+			++i;
+		}
+
+		if(!m)
+			throw Dbg::Error("Not found");
+
+		const char* mname = m->oname().c_str();
+
+		DBus::ReturnMessage reply(msg);
+
+		reply.append( DBUS_TYPE_STRING, &(mname), DBUS_TYPE_INVALID);
+		conn().send(reply);
+	}
+	catch( Dbg::Error& e )
+	{
+		DBus::ErrorMessage em ( msg, BTOOL_ERROR, e.what() );
+		conn().send(em);
+	}
+}
+
+void ModuleDatabase::NewInstance ( const DBus::CallMessage& msg )
+{
+	try
+	{
+		DBus::MessageIter ri = msg.r_iter();
+
+		const char* mname = ri.get_string();
+
+		Module* m = NULL;
+
+		ModulePList::iterator i = _modules.begin();
+		while( i != _modules.end() )
+		{
+			if( (*i)->oname() == mname )
+			{
+				m = (*i);
+				break;
+			}
+			++i;
+		}
+
+		if(!m)
+			throw Dbg::Error("Not found");
+
+		Instance* ic = ModuleLoader::instantiate(m, oname()+'/', _conf_root);
+
+		_instances.push_back(ic);
+
+		const char* ipath = ic->oname().c_str();
+
+		DBus::ReturnMessage reply(msg);
+
+		reply.append( DBUS_TYPE_STRING, &(ipath), DBUS_TYPE_INVALID );
+		conn().send(reply);
+	}
+	catch( Dbg::Error& e )
+	{
+		DBus::ErrorMessage em ( msg, BTOOL_ERROR, e.what() );
+		conn().send(em );
+	}
+}
+
+void ModuleDatabase::RemoveInstance ( const DBus::CallMessage& msg )
+{
+	try
+	{
+		DBus::MessageIter ri = msg.r_iter();
+
+		const char* isname = ri.get_string();
+
+		Instance* is = NULL;
+
+		InstancePList::iterator i = _instances.begin();
+		while( i != _instances.end() )
+		{
+			if( (*i)->oname() == isname )
+			{
+				is = (*i);
+				delete is;
+				_instances.erase(i);
+				break;
+			}
+			++i;
+		}
+
+		if(!is)
+			throw Dbg::Error("Not found");
+
+		DBus::ReturnMessage reply(msg);
+		conn().send(reply);
+	}
+	catch( Dbg::Error& e )
+	{
+		DBus::ErrorMessage em ( msg, BTOOL_ERROR, e.what() );
+		conn().send(em);
+	}
+}
 #if 0
 void ModuleDatabase::LoadModule ( const DBus::CallMessage& msg )
 {

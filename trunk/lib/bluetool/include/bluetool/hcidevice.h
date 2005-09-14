@@ -121,92 +121,78 @@ private:
 	*/
 	virtual void on_get_auth_enable
 	(
-		u16 status,
 		void* cookie,
 		u8 auth
 	) = 0;
 
 	virtual void on_set_auth_enable
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_encrypt_mode
 	(
-		u16 status,
 		void* cookie,
 		u8 encrypt
 	) = 0;
 
 	virtual void on_set_encrypt_mode
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_scan_enable
 	(
-		u16 status,
 		void* cookie,
 		u8 auth
 	) = 0;
 
 	virtual void on_set_scan_enable
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_name
 	(
-		u16 status,
 		void* cookie,
 		const char* name
 	) = 0;
 
 	virtual void on_set_name
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_class
 	(
-		u16 status,
 		void* cookie,
 		u8* dev_class
 	) = 0;
 
 	virtual void on_set_class
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_voice_setting
 	(
-		u16 status,
 		void* cookie,
 		u16 setting
 	) = 0;
 
 	virtual void on_set_voice_setting
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_get_address
 	(
-		u16 status,
 		void* cookie,
 		const char* address
 	) = 0;
 
 	virtual void on_get_version
 	(
-		u16 status,
 		void* cookie,
 		const char* hci_ver,
 		u16 hci_rev,
@@ -217,32 +203,27 @@ private:
 
 	virtual void on_get_features
 	(
-		u16 status,
 		void* cookie,
 		const char* features
 	) = 0;
 
 	virtual void on_inquiry_complete
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_inquiry_cancel
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_periodic_inquiry_started
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
 	virtual void on_periodic_inquiry_cancel
 	(
-		u16 status,
 		void* cookie
 	) = 0;
 
@@ -301,6 +282,8 @@ public:
 
 	inline LocalDevice* local();
 
+	inline const ConnPTable& connections() const;
+
 	/*	device properties
 	*/
 	void get_name( void* cookie, int timeout );
@@ -347,28 +330,24 @@ private:
 	*/
 	virtual void on_get_name
 	(	
-		u16 status,
 		void* cookie,
 		const char* name
 	) = 0;
 
 	virtual void on_get_address
 	(	
-		u16 status,
 		void* cookie,
 		const char* addr
 	) = 0;
 
 	virtual void on_get_class
 	(
-		u16 status,
 		void* cookie,
 		u8* dev_class
 	) = 0;
 
 	virtual void on_get_version
 	(
-		u16 status,
 		void* cookie,
 		const char* lmp_ver,
 		u16 lmp_sub,
@@ -377,14 +356,12 @@ private:
 
 	virtual void on_get_features
 	(
-		u16 status,
 		void* cookie,
 		const char* features
 	) = 0;
 
 	virtual void on_get_clock_offset
 	(
-		u16 status,
 		void* cookie,
 		u16 clock_offset
 	) = 0;
@@ -457,6 +434,11 @@ u16 RemoteDevice::clock_offset() const
 void RemoteDevice::clock_offset( u8 co )
 {
 	_info.clk_offset = co;
+}
+
+const ConnPTable& RemoteDevice::connections() const
+{
+	return _connections;
 }
 
 }//namespace Hci

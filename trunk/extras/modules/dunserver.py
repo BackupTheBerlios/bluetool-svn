@@ -1,8 +1,8 @@
 
 
-class bluetool_dund:
+class bluetool_dunserver:
 	'''Makes this device accessible as a dial-up modem'''
 
 	def __init__(self):
-		print "Loading demo service"
+		print "Loading Dial-Up server"
 		self.settings = {}

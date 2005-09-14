@@ -1,7 +1,7 @@
 #ifndef __REF_PTR_H
 #define __REF_PTR_H
 
-#define USE_BOOST_PTR
+//#define USE_BOOST_PTR
 
 #ifdef USE_BOOST_PTR
 
@@ -17,14 +17,9 @@ template <class T>
 class RefPtr
 {
 public:
-	RefPtr( T* ptr = NULL )
-	: __ptr(ptr)
-	{}
+	RefPtr( T* ptr = NULL );
 
-	~RefPtr()
-	{
-		if(__cnt.one()) delete __ptr;
-	}
+	~RefPtr();
 
 	RefPtr& operator = (const RefPtr& ref)
 	{
@@ -63,6 +58,6 @@ private:
 	RefCnt __cnt;
 };
 
-#endif
+#endif//USE_BOOST_PTR
 
 #endif//__REF_PTR_H

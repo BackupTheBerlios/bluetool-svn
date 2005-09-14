@@ -36,7 +36,7 @@ def on_tray_clicked(widget,event):
 		popup.show_all()
 		popup.popup(None, None, None, event.button, event.time)
 
-def on_quit(widget):
+def on_quit(*args):
 	gtk.main_quit()
 	
 

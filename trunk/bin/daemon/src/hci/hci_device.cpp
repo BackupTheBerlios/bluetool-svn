@@ -55,9 +55,6 @@ void HciDevice::Up( const DBus::CallMessage& msg )
 		u16 status = 0;
 		DBus::ReturnMessage reply(msg);
 
-		reply.append( DBUS_TYPE_UINT16, &status,
-			      DBUS_TYPE_INVALID
-		);
 		_bus.send(reply);
 	}
 	catch( Dbg::Error& e )
@@ -76,9 +73,7 @@ void HciDevice::Down( const DBus::CallMessage& msg )
 		u16 status;
 
 		DBus::ReturnMessage reply(msg);
-		reply.append( DBUS_TYPE_UINT16, &status,
-			       DBUS_TYPE_INVALID
-		);
+
 		_bus.send(reply);
 	}
 	catch( Dbg::Error& e )
@@ -191,8 +186,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 
 		Hci::LocalDevice::get_link_mode(&lm);
 		u16 status = 0;
-		reply->append( DBUS_TYPE_UINT16, &status,
-			       DBUS_TYPE_UINT32, &lm,
+		reply->append( DBUS_TYPE_UINT32, &lm,
 			       DBUS_TYPE_INVALID
 		);
 		_bus.send(*reply);
@@ -206,8 +200,7 @@ void HciDevice::GetProperty( const DBus::CallMessage& msg )
 
 		Hci::LocalDevice::get_link_policy(&lp);
 		u16 status = 0;
-		reply->append( DBUS_TYPE_UINT16, &status,
-			       DBUS_TYPE_UINT32, &lp,
+		reply->append( DBUS_TYPE_UINT32, &lp,
 			       DBUS_TYPE_INVALID
 		);
 		_bus.send(*reply);
@@ -368,8 +361,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 
 		Hci::LocalDevice::set_link_mode(lm);
 		u16 status = 0;
-		reply->append( DBUS_TYPE_UINT16, &status,
-			       DBUS_TYPE_INVALID
+		reply->append( DBUS_TYPE_INVALID
 		);
 		_bus.send(*reply);
 		delete reply;
@@ -381,10 +373,7 @@ void HciDevice::SetProperty( const DBus::CallMessage& msg )
 		u32 lp = i.get_uint32();
 
 		Hci::LocalDevice::set_link_policy(lp);
-		u16 status = 0;
-		reply->append( DBUS_TYPE_UINT16, &status,
-			       DBUS_TYPE_INVALID
-		);
+
 		_bus.send(*reply);
 		delete reply;
 	}	
@@ -493,127 +482,94 @@ void HciDevice::clear_cache()
 #endif
 void HciDevice::on_get_auth_enable
 (
-	u16 status,
 	void* cookie,
 	u8 auth
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(auth),
+	reply->append( DBUS_TYPE_BYTE,   &(auth),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_set_auth_enable
 (
-	u16 status,
 	void* cookie
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_encrypt_mode
 (
-	u16 status,
 	void* cookie,
 	u8 encrypt
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(encrypt),
+	reply->append( DBUS_TYPE_BYTE,   &(encrypt),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_set_encrypt_mode
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_scan_enable
 (
-	u16 status,
 	void* cookie,
 	u8 type
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(type),
+	reply->append( DBUS_TYPE_BYTE,   &(type),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_set_scan_enable
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_name
 (
-	u16 status,
 	void* cookie,
 	const char* name
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(name),
+	reply->append( DBUS_TYPE_STRING, &(name),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_set_name
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_class
 (
-	u16 status,
 	void* cookie,
 	u8* dev_class
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   dev_class+0,
+	reply->append( DBUS_TYPE_BYTE,   dev_class+0,
 		       DBUS_TYPE_BYTE,   dev_class+1,
 		       DBUS_TYPE_BYTE,   dev_class+2,
 		       DBUS_TYPE_INVALID
@@ -622,63 +578,46 @@ void HciDevice::on_get_class
 
 void HciDevice::on_set_class
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_voice_setting
 (
-	u16 status,
 	void* cookie,
 	u16 setting
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_UINT16, &(setting),
+	reply->append( DBUS_TYPE_UINT16, &(setting),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_set_voice_setting
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_get_address
 (
-	u16 status,
 	void* cookie,
 	const char* address
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(address),
+	reply->append( DBUS_TYPE_STRING, &(address),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_get_version
 (
-	u16 status,
 	void* cookie,
 	const char* hci_ver,
 	u16 hci_rev,
@@ -689,8 +628,7 @@ void HciDevice::on_get_version
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(hci_ver),
+	reply->append( DBUS_TYPE_STRING, &(hci_ver),
 		       DBUS_TYPE_UINT16, &(hci_rev),
 		       DBUS_TYPE_STRING, &(lmp_ver),
 		       DBUS_TYPE_UINT16, &(lmp_subver),
@@ -701,69 +639,43 @@ void HciDevice::on_get_version
 
 void HciDevice::on_get_features
 (
-	u16 status,
 	void* cookie,
 	const char* features
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(features),
+	reply->append( DBUS_TYPE_STRING, &(features),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciDevice::on_inquiry_complete
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_inquiry_cancel
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_periodic_inquiry_started
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 void HciDevice::on_periodic_inquiry_cancel
 (
-	u16 status,
 	void* cookie
 )
 {
-	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
-
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_INVALID
-	);
 }
 
 /*	special handlers
@@ -859,45 +771,39 @@ void HciRemote::CreateConnection( const DBus::CallMessage& msg )
 
 void HciRemote::on_get_name
 (	
-	u16 status,
 	void* cookie,
 	const char* name
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(name),
+	reply->append( DBUS_TYPE_STRING, &(name),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciRemote::on_get_address
 (	
-	u16 status,
 	void* cookie,
 	const char* addr
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(addr),
+	reply->append( DBUS_TYPE_STRING, &(addr),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciRemote::on_get_class
 (
-	u16 status,
 	void* cookie,
 	u8* dev_class
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   dev_class+0,
+	reply->append( DBUS_TYPE_BYTE,   dev_class+0,
 		       DBUS_TYPE_BYTE,   dev_class+1,
 		       DBUS_TYPE_BYTE,   dev_class+2,
 		       DBUS_TYPE_INVALID
@@ -906,7 +812,6 @@ void HciRemote::on_get_class
 
 void HciRemote::on_get_version
 (
-	u16 status,
 	void* cookie,
 	const char* lmp_ver,
 	u16 lmp_subver,
@@ -915,8 +820,7 @@ void HciRemote::on_get_version
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(lmp_ver),
+	reply->append( DBUS_TYPE_STRING, &(lmp_ver),
 		       DBUS_TYPE_UINT16, &(lmp_subver),
 		       DBUS_TYPE_STRING, &(manufacturer),
 		       DBUS_TYPE_INVALID
@@ -925,30 +829,26 @@ void HciRemote::on_get_version
 
 void HciRemote::on_get_features
 (
-	u16 status,
 	void* cookie,
 	const char* features
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_STRING, &(features),
+	reply->append( DBUS_TYPE_STRING, &(features),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciRemote::on_get_clock_offset
 (
-	u16 status,
 	void* cookie,
 	u16 clock_offset
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_UINT16, &(clock_offset),
+	reply->append( DBUS_TYPE_UINT16, &(clock_offset),
 		       DBUS_TYPE_INVALID
 	);
 }
@@ -1071,30 +971,26 @@ void HciConnection::SetProperty( const DBus::CallMessage& msg )
 
 void HciConnection::on_get_link_quality
 (
-	u16 status,
 	void* cookie,
 	u8 lq
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(lq),
+	reply->append( DBUS_TYPE_BYTE,   &(lq),
 		       DBUS_TYPE_INVALID
 	);
 }
 
 void HciConnection::on_get_rssi
 (
-	u16 status,
 	void* cookie,
 	i8 rssi		
 )
 {
 	DBus::ReturnMessage* reply = (DBus::ReturnMessage *) cookie;
 
-	reply->append( DBUS_TYPE_UINT16, &(status),
-		       DBUS_TYPE_BYTE,   &(rssi),
+	reply->append( DBUS_TYPE_BYTE,   &(rssi),
 		       DBUS_TYPE_INVALID
 	);
 }

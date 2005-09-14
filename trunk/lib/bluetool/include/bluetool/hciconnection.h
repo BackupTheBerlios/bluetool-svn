@@ -74,55 +74,47 @@ public:
 	*/
 	virtual void on_mode_change
 	(
-		u16 status,
 		void* cookie,
 		u8 mode
 	){}
 
 	virtual void on_get_role
 	(
-		u16 status,
 		void* cookie,
 		bool is_master
 	){}
 
 	virtual void on_role_change
 	(
-		u16 status,
 		void* cookie,
 		bool is_master
 	){}
 
 	virtual void on_get_policy
 	(
-		u16 status,
 		void* cookie,
 		u16 policy
 	){}
 
 	virtual void on_set_policy
 	(
-		u16 status,
 		void* cookie
 	){}
 
 	virtual void on_get_link_quality
 	(
-		u16 status,
 		void* cookie,
 		u8 lq
 	) = 0;
 
 	virtual void on_get_rssi
 	(
-		u16 status,
 		void* cookie,
 		i8 rssi
 	) = 0;
 
 	virtual void on_get_transmit_power
 	(
-		u16 status,
 		void* cookie,
 		u8 power
 	){}

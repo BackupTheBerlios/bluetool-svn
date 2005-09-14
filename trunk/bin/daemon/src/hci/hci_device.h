@@ -51,92 +51,78 @@ private:
 	*/
 	void on_get_auth_enable
 	(
-		u16 status,
 		void* cookie,
 		u8 auth
 	);
 
 	void on_set_auth_enable
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_encrypt_mode
 	(
-		u16 status,
 		void* cookie,
 		u8 encrypt
 	);
 
 	void on_set_encrypt_mode
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_scan_enable
 	(
-		u16 status,
 		void* cookie,
 		u8 auth
 	);
 
 	void on_set_scan_enable
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_name
 	(
-		u16 status,
 		void* cookie,
 		const char* name
 	);
 
 	void on_set_name
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_class
 	(
-		u16 status,
 		void* cookie,
 		u8* dev_class
 	);
 
 	void on_set_class
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_voice_setting
 	(
-		u16 status,
 		void* cookie,
 		u16 setting
 	);
 
 	void on_set_voice_setting
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_get_address
 	(
-		u16 status,
 		void* cookie,
 		const char* address
 	);
 
 	void on_get_version
 	(
-		u16 status,
 		void* cookie,
 		const char* hci_ver,
 		u16 hci_rev,
@@ -147,32 +133,27 @@ private:
 
 	void on_get_features
 	(
-		u16 status,
 		void* cookie,
 		const char* features
 	);
 
 	void on_inquiry_complete
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_inquiry_cancel
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_periodic_inquiry_started
 	(
-		u16 status,
 		void* cookie
 	);
 
 	void on_periodic_inquiry_cancel
 	(
-		u16 status,
 		void* cookie
 	);
 	
@@ -214,28 +195,24 @@ private:
 	*/
 	void on_get_name
 	(	
-		u16 status,
 		void* cookie,
 		const char* name
 	);
 
 	void on_get_address
 	(	
-		u16 status,
 		void* cookie,
 		const char* addr
 	);
 
 	void on_get_class
 	(
-		u16 status,
 		void* cookie,
 		u8* dev_class
 	);
 
 	void on_get_version
 	(
-		u16 status,
 		void* cookie,
 		const char* lmp_ver,
 		u16 lmp_sub,
@@ -244,14 +221,12 @@ private:
 
 	void on_get_features
 	(
-		u16 status,
 		void* cookie,
 		const char* features
 	);
 
 	void on_get_clock_offset
 	(
-		u16 status,
 		void* cookie,
 		u16 clock_offset
 	);
@@ -285,14 +260,12 @@ private:
 	*/
 	void on_get_link_quality
 	(
-		u16 status,
 		void* cookie,
 		u8 lq
 	);
 
 	void on_get_rssi
 	(
-		u16 status,
 		void* cookie,
 		i8 rssi		
 	);

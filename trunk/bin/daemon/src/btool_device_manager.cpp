@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include "bluedebug.h"
 #include "btool_device_manager.h"
 

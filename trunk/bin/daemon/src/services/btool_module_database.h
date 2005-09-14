@@ -31,9 +31,17 @@ public:
 	*/
 	void ListModules ( const DBus::CallMessage& );
 
+	void ReloadModules ( const DBus::CallMessage& );
+
+	void SearchClassId ( const DBus::CallMessage& );
+
 //	void LoadModule	 ( const DBus::CallMessage& );
 
 //	void UnloadModule( const DBus::CallMessage& );
+
+	void NewInstance ( const DBus::CallMessage& );
+
+	void RemoveInstance ( const DBus::CallMessage& );
 
 	inline const ModulePList& modules() const;
 

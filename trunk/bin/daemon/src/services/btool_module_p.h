@@ -12,7 +12,8 @@ namespace Bluetool
 struct Module::Private
 {
 	Py::Obj		module;
-	PyObject*	modclass;
+	PyObject*	modclass;	// python class describing the service
+	PyObject*	modservices;
 
 	std::string name;
 	std::string dbus_root;

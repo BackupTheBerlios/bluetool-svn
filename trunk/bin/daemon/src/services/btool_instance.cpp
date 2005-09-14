@@ -1,5 +1,6 @@
 #include "btool_instance_p.h"
 #include "btool_module_p.h"
+#include <common/refptr_impl.h>
 
 namespace Bluetool
 {
@@ -12,7 +13,7 @@ static const char* _gen_svc_path( const std::string& dbus_root, const std::strin
 
 	handle = ( handle + 1 ) % 255;
 
-	snprintf(buffer,sizeof(buffer),"%s%s%02X",dbus_root.c_str(),svc_name.c_str(),handle);
+	snprintf(buffer,sizeof(buffer),"%s"BTOOL_INST_SUBDIR"%s%02X",dbus_root.c_str(),svc_name.c_str(),handle);
 
 	return buffer;
 }
@@ -41,7 +42,7 @@ Instance::Private::~Private()
 
 Instance::Instance( const Module* mod, const std::string& dbus_root, const std::string& conf_root )
 :
-	DBus::LocalInterface( BTOOL_SVC_IFACE ),
+	DBus::LocalInterface( BTOOL_INST_IFACE ),
 
 	DBus::LocalObject( _gen_svc_path(dbus_root,mod->name()) , DBus::Connection::SystemBus() ),
 
@@ -79,9 +80,7 @@ void Instance::GetOption	( const DBus::CallMessage& msg )
 	{
 		if(!pvt->settings)
 		{
-			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "unsupported by plugin");
-			conn().send(reply);
-			return;
+			throw Dbg::Error("unsupported by plugin");
 		}
 		DBus::MessageIter ri = msg.r_iter();
 
@@ -91,9 +90,7 @@ void Instance::GetOption	( const DBus::CallMessage& msg )
 
 		if(!value)
 		{
-			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "no such option");
-			conn().send(reply);
-			return;
+			throw Dbg::Error("no such option");
 		}
 		Py::Obj pstr ( PyObject_Str( value ) );
 
@@ -118,9 +115,7 @@ void Instance::SetOption	( const DBus::CallMessage& msg )
 	{
 		if(!pvt->settings)
 		{
-			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "unsupported by plugin");
-			conn().send(reply);
-			return;
+			throw Dbg::Error("unsupported by plugin");
 		}
 		DBus::MessageIter ri = msg.r_iter();
 
@@ -132,9 +127,7 @@ void Instance::SetOption	( const DBus::CallMessage& msg )
 
 		if( PyDict_SetItemString( *pvt->settings, key, *pvalue ) < 0 )
 		{
-			DBus::ErrorMessage reply (msg, BTOOL_ERROR, "can't set option");
-			conn().send(reply);
-			return;
+			throw Dbg::Error("can't set option");
 		}
 		DBus::ReturnMessage reply (msg);
 		conn().send(reply);
@@ -165,8 +158,8 @@ void Instance::Action	( const DBus::CallMessage& msg )
 	}
 	catch( Dbg::Error& e )
 	{
-		DBus::ErrorMessage( msg, BTOOL_ERROR, e.what() );
-		conn().send(msg);
+		DBus::ErrorMessage em (msg, BTOOL_ERROR, e.what());
+		conn().send(em);
 	}
 }
 
@@ -181,8 +174,6 @@ ActionThread::ActionThread( Py::Obj& service, const DBus::CallMessage& call )
 
 	_thread_state = PyThreadState_New(mainistate);
 
-	PyEval_ReleaseLock();
-
 	/*	parse message
 	*/
 	DBus::MessageIter ri = call.r_iter();
@@ -195,6 +186,8 @@ ActionThread::ActionThread( Py::Obj& service, const DBus::CallMessage& call )
 	if(!_method || !PyCallable_Check(*_method))
 	{
 		PyErr_Print();
+		PyEval_ReleaseLock();
+
 		throw Dbg::Error("action not supported");
 	}
 
@@ -228,6 +221,8 @@ ActionThread::ActionThread( Py::Obj& service, const DBus::CallMessage& call )
 		*/	default:
 
 				Py_XDECREF(tuple);
+				PyEval_ReleaseLock();
+
 				throw Dbg::Error("parameter type not supported");
 		}
 
@@ -242,6 +237,8 @@ ActionThread::ActionThread( Py::Obj& service, const DBus::CallMessage& call )
 		if( !tuple )
 		{
 			PyErr_Print();
+			PyEval_ReleaseLock();
+
 			throw Dbg::Error("Unable to allocate parameters");
 		}
 		PyTuple_SET_ITEM( &tuple, i, *value );

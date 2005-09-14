@@ -23,8 +23,10 @@ public:
 
 	const std::string& name() const;
 
-	void Instance ( const DBus::CallMessage& );
+	bool provides_service( u16 svc_id );
 
+	/*	dbus methods
+	*/
 	void Description ( const DBus::CallMessage& );
 
 	void Name ( const DBus::CallMessage& );

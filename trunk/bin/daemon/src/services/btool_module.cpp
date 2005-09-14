@@ -1,4 +1,5 @@
 #include "btool_module_p.h"
+#include <common/refptr_impl.h>
 
 namespace Bluetool
 {
@@ -61,10 +62,10 @@ Module::Module( const std::string& name, const std::string& dbus_root, const std
 	*/
 	PyObject* dict = PyModule_GetDict( *pvt->module );
 
-	std::string service = "bluetool_";
-	service += name;
+	std::string modclass = "bluetool_";
+	modclass += name;
 
-	pvt->modclass = PyDict_GetItemString( dict,service.c_str() );
+	pvt->modclass = PyDict_GetItemString( dict,modclass.c_str() );
 
 	if(!pvt->modclass)
 	{
@@ -73,6 +74,14 @@ Module::Module( const std::string& name, const std::string& dbus_root, const std
 
 		throw Dbg::Error("unable to find service class");
 	}
+
+	std::string services = name+"_services";
+
+	/*	we don't check for failure here, it's acceptable
+		for a plugin not to include a service class list
+	*/
+	pvt->modservices = PyDict_GetItemString( dict,services.c_str() );
+
 	PyEval_ReleaseLock();
 }
 
@@ -83,6 +92,22 @@ const std::string& Module::name() const
 {
 	return pvt->name;
 }
+
+bool Module::provides_service( u16 svc_id )
+{
+	if( !pvt->modservices 
+	 || !PySequence_Check(pvt->modservices)
+	)
+		return false;
+
+	Py::Obj sid (Py_BuildValue( "H", svc_id ));
+
+	if( PySequence_Contains(pvt->modservices,*sid) <= 0 )
+		return false;
+
+	return true;
+}
+
 /*
 void Module::Instance ( const DBus::CallMessage& )
 {

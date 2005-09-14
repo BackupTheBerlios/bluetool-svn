@@ -8,7 +8,7 @@ import gtk
 import gtk.glade
 import gobject
 import dbus
-import pdb
+import bluetool
 
 if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
@@ -36,110 +36,9 @@ def bt_empty_handler(list):
 	#print list
 	pass
 
-#
-#	util
-#
-SVC_CLASS_IDS = {
-	0x1101:	'Serial Port',
-	0x1102: 'LAN Access over PPP',
-	0x1103:	'Dialup Networking',
-	0x1104:	'IrMC Sync',
-	0x1105:	'OBEX Object Push',
-	0x1106:	'OBEX File Transfer',
-	0x1107: 'IrMC Sync Command',
-	0x1108:	'Headset',
-	0x1109:	'Cordless Telephony',
-	0x110A:	'Audio source',
-	0x110B:	'Audio Sink',
-	0x110C:	'A/V Remote Control Target',
-	0x110D: 'Advanced Audio Distribution',
-	0x110E: 'A/V Remote Control',
-	0x110F: 'Video Conferencing',
-	0x1110: 'Intercom',
-	0x1111: 'Fax',
-	0x1112:	'Headset Audio Gateway',
-	0x1113: 'WAP',
-	0x1114: 'WAP Client',
-	0x1115: 'PAN User',
-	0x1116: 'Network Access Protocol',
-	0x1117: 'Network Gateway',
-	0x1118: 'Direct Printing',
-	0x1119:	'Reference Printing',
-	0x111A: 'Imaging',
-	0x111B: 'Imaging Responder',
-	0x111C: 'Imaging Automatic Archive',
-	0x111D: 'Imaging Referenced Objects',
-	0x111E: 'Handsfree',
-	0x111F:	'Handsfree Audio Gateway',
-	0x1120: 'Direct Printing Reference Objects',
-	0x1121: 'Reflected UI',
-	0x1122: 'Basic Printing',
-	0x1123: 'Printing Status',
-	0x1124: 'Human Interface Device',
-	0x1125: 'Hardcopy Cable Replacement',
-	0x1126: 'HCR Print',
-	0x1127: 'HCR Scan',
-	0x1128: 'Common ISDN Access',
-	0x1120: 'Video Conferencing Gateway',
-	0x112A: 'UDI MT',
-	0x112B: 'UDI TA',
-	0x112C: 'Audio/Video',
-	0x112D: 'SIM Access',
-	0x112E: 'Phonebook Access - PCE',
-	0x112F: 'Phonebook Access - PSE',
-	0x1200: 'PnP Information',
-	0x1201: 'Generic Networking',
-	0x1202: 'Generic File Transfer',
-	0x1203: 'Generic Audio',
-	0x1204: 'Generic Telephony',
-	0x1205: 'UPNP Service',
-	0x1206: 'UPNP IP Service',
-	0x1300: 'EDSP_UPNP_IP_PAN',
-	0x1301: 'EDSP_UPNP_IP_LAP',
-	0x1302: 'EDSP_UPNP_IP_L2CAP',
-	0x1303:	'Video Source',
-	0x1304: 'Video Sink',
-	0x1305: 'Video Distribution'
-}
-
-PROTO_UUIDS = {
- 	0x0001:	'SDP',
-	0x0002:	'UDP',
-	0x0003:	'RFCOMM',
-	0x0004:	'TCP',
-	0x0005:	'TCS-BIN',
-	0x0006:	'TCS-AT',
-	0x0008:	'OBEX',
-	0x0009:	'IP',
-	0x000a:	'FTP',
-	0x000c:	'HTTP',
-	0x000e:	'WSP',
-	0x000f:	'BNEP',
-	0x0010:	'UPNP',
-	0x0011:	'HIDP',
-	0x0012:	'HardcopyControlChannel',
-	0x0014:	'HardcopyDataChannel',
-	0x0016:	'HardcopyNotification',
-	0x0017:	'Audio/Video Control Protocol',
-	0x0019:	'Audio/Video Distribution Protocol',
-	0x001b:	'CMTP',
-	0x001d:	'UDI_C-Plane',
-	0x0100:	'L2CAP',
-}
-
 def major_to_pixmap(major):
-	
-	pixmaps = [ 
-		'bt-logo.png', #Unknown
-		'btdevice-computer.png',
-		'btdevice-phone.png',
-		'btdevice-lan.png',
-		'bt-logo.png',	#A/V
-		'bt-logo.png', #Peripherial
-		'btdevice-imaging.png', 
-		'bt-logo.png' #Wearable
-	];
-	return gtk.gdk.pixbuf_new_from_file( pixmaps[major] )
+
+	return gtk.gdk.pixbuf_new_from_file( bluetool.devclass2icon(major) )
 
 class BrowserModel:
 
@@ -157,8 +56,8 @@ class BrowserModel:
 		#	create proxy for remote object (the manager)
 		#
 		self.bus = dbus.SystemBus()
-		self.obj = self.bus.get_object('org.bluetool','/org/bluetool/manager')
-		self.iface = dbus.Interface(self.obj,'org.bluetool.manager')
+		#self.obj = self.bus.get_object('org.bluetool','/org/bluetool/manager')
+		self.iface = bluetool.get_manager(self.bus)
 
 		#
 		#	bind signals to local hook functions
@@ -178,18 +77,15 @@ class BrowserModel:
 		#
 		self.module_store = gtk.ListStore(str,str,str)
 
-		moddb = dbus.Interface(
-			self.bus.get_object('org.bluetool', '/org/bluetool/manager/modules'), 				'org.bluetool.modules'
-		)
+		self.moddb = bluetool.get_modules(self.bus)
 
-		mods = moddb.ListModules()
+		mods = self.moddb.ListModules()
 
 		print mods
 
 		for mod_path in mods:
-			mod = dbus.Interface(
-				self.bus.get_object('org.bluetool', mod_path), 'org.bluetool.module'
-			)
+			mod = bluetool.get_module(self.bus,mod_path)
+
 			self.module_store.append([mod_path, mod.Name(), mod.Description()])
 
 
@@ -207,8 +103,8 @@ class BrowserModel:
 
 		obj = { 'path': devpath, 'dev': dev, 'hci': hci }
 
-		name = hci.GetProperty('name')[1]
-		address = hci.GetProperty('address')[1]
+		name = hci.GetProperty('name')
+		address = hci.GetProperty('address')
 
 		label = name + ' ('+address+')'
 
@@ -258,18 +154,18 @@ class BrowserModel:
 		newref = gtk.TreeRowReference(inquiry_store,inquiry_store.get_path(newit))
 
 		hci.GetProperty('name',
-			reply_handler=lambda st,name:
-				self.remote_name_hdl(inquiry_store,newref,st,name),
+			reply_handler=lambda name:
+				self.remote_name_hdl(inquiry_store,newref,name),
 			error_handler=bt_popup_error)
 
 		hci.GetProperty('address',
-			reply_handler=lambda st,addr:
-				self.remote_address_hdl(inquiry_store,newref,st,addr),
+			reply_handler=lambda addr:
+				self.remote_address_hdl(inquiry_store,newref,addr),
 			error_handler=bt_popup_error)
 
 		hci.GetProperty('class',
-			reply_handler=lambda st,svc,major,minor:
-				self.remote_class_hdl(inquiry_store,newref,st,svc,major,minor),
+			reply_handler=lambda svc,major,minor:
+				self.remote_class_hdl(inquiry_store,newref,svc,major,minor),
 			error_handler=bt_popup_error)
 
 		#
@@ -283,8 +179,8 @@ class BrowserModel:
 	def add_record(self,service_store,rec_path):
 
 		print 'new record @', rec_path
-		rec_obj = self.bus.get_object('org.bluetool',rec_path)
-		rec = dbus.Interface(rec_obj,'org.bluetool.remote.sdp.record')
+
+		rec = bluetool.get_record(self.bus,rec_path)
 
 		obj = { 'path': rec_path, 'rec': rec }
 
@@ -298,7 +194,7 @@ class BrowserModel:
 		try:
 			svc_id = rec.GetClassIdList()
 			#print svc_id
-			desc = SVC_CLASS_IDS[svc_id[0]]
+			desc = bluetool.SDP_SVCLASS_IDS[svc_id[0]]
 		except:
 			pass
 
@@ -308,15 +204,15 @@ class BrowserModel:
 		#try: print rec.GetProtocolDescList()
 		#except:	pass
 
-	def remote_name_hdl(self,store,ref,st,name):
+	def remote_name_hdl(self,store,ref,name):
 		it = store.get_iter(ref.get_path())
 		store.set_value(it,2,name)
 
-	def remote_address_hdl(self,store,ref,st,addr):
+	def remote_address_hdl(self,store,ref,addr):
 		it = store.get_iter(ref.get_path())
 		store.set_value(it,3,addr)
 
-	def remote_class_hdl(self,store,ref,st,svc,major,minor):
+	def remote_class_hdl(self,store,ref,svc,major,minor):
 		it = store.get_iter(ref.get_path())
 		store.set_value(it,5,major)
 		store.set_value(it,6,major_to_pixmap(major))
@@ -330,6 +226,15 @@ class BrowserModel:
 				inquiry_store.remove(subit)
 				return
 			subit = self.device_store.iter_next(subit)
+
+	#
+	#	plugins
+	#
+	def launch_plugin(self,name):
+		
+		ipath = self.moddb.NewInstance(name)
+
+		modi = bluetool.get_instance(self.bus, ipath)
 
 	#
 	#	functions to be called by the controller (the gui, actually)
@@ -353,13 +258,21 @@ class BluetoolBrowser:
 		#
 		self.widgets = gtk.glade.XML('bluetool_gui.glade', 'bt_browser_wnd')
 		handlers = {
+			#
+			#	browser panel
+			#
 			"on_bt_browser_close"		: self.on_close,
 			"on_bt_inqstart_btn_clicked"	: self.on_start_inquiry,
 			"on_bt_inqstop_btn_clicked"	: self.on_stop_inquiry,
 			"on_bt_devices_cb_selected"	: self.on_select_device,
 			"on_bt_discovered_tv_row_activated" : self.on_click_remote,
 			"on_bt_svcscan_btn_clicked"	: self.on_click_refresh,
-			"on_bt_services_tv_row_activated" : self.on_click_service
+			"on_bt_services_tv_row_activated" : self.on_dclick_service,
+			"on_bt_services_tv_clicked"	: self.on_click_service,
+			#
+			#	plugins panel
+			#
+			"on_bt_launchpi_btn_clicked"	: self.on_launch_plugin
 		}
 		self.widgets.signal_autoconnect(handlers)
 
@@ -579,7 +492,7 @@ class BluetoolBrowser:
 		else:
 			return True
 
-	def inquiry_complete_hdl(self,list):
+	def inquiry_complete_hdl(self):
 		self.inquiry_progress.set_text("Device scan complete")
 
 		if self.inquiry_running:	# but don't go on if scan was canceled by user
@@ -609,7 +522,7 @@ class BluetoolBrowser:
 		obj['hci'].StartInquiry(
 			reply_handler=self.inquiry_complete_hdl,error_handler=bt_popup_error)
 
-	def inquiry_canceled_hdl(self,list):
+	def inquiry_canceled_hdl(self):
 		gobject.source_remove(self.inquiry_runner)		
 		self.inquiry_progress.set_text("Canceled")
 		self.inquiry_progress.set_fraction(0)
@@ -632,15 +545,60 @@ class BluetoolBrowser:
 	#
 	#
 	#
-	def on_click_service(self, tv, path, col):
+	def on_click_service(self,widget,event):
 
-		model = tv.get_model()
+		if event.button == 3:
+			popup = gtk.Menu()
 
-		if not model: return
+			model, it = self['bt_services_tv'].get_selection().get_selected();
+			record = model[it][0]
 
-		obj = model[path][0]
+			use = gtk.MenuItem('Use Service')
+			use.connect('activate',self.on_use_service,record)
+			popup.add(use)
+
+			properties = gtk.MenuItem('Properties')
+			properties.connect('activate', self.on_service_properties)
+			popup.add(properties)
+	
+			popup.show_all()
+			popup.popup(None, None, None, event.button, event.time)
+
+	def on_service_properties(self,widget):
+
+		model, it = self['bt_services_tv'].get_selection().get_selected();
+			
+		obj = model[it][0]
 
 		dialog = BluetoolServiceDialog(obj)
+
+	def on_dclick_service(self, tv, path, col):
+		
+		model = tv.get_model()
+
+		record = model[path][0]
+
+		self.on_use_service(record)
+
+	def on_use_service(self,record):
+
+		cidlist = record.GetClassIdList()
+		pass
+
+
+	#
+	#	plugin panel
+	#
+	def on_launch_plugin(self, widget):
+
+		bt_installedpi_tv = self['bt_installedpi_tv']
+
+		mdl, it = bt_installedpi_tv.get_selection().get_selected()
+
+		mname = mdl[it][0]
+
+		self.bmodel.launch_plugin(mname)
+		
 
 class BluetoolServiceDialog:
 
@@ -667,7 +625,7 @@ class BluetoolServiceDialog:
 		cid_list = self.dbus_obj['rec'].GetClassIdList()
 
 		for cid_uuid in cid_list:
-			cid_name = SVC_CLASS_IDS[cid_uuid]
+			cid_name = bluetool.SDP_SVCLASS_IDS[cid_uuid]
 
 			self.class_store.append([ cid_name ])
 
@@ -686,7 +644,7 @@ class BluetoolServiceDialog:
 
 		for proto_desc in proto_list:
 			proto_uuid = proto_desc[0]
-			proto_label = PROTO_UUIDS[proto_uuid]
+			proto_label = bluetool.SDP_PROTO_UUIDS[proto_uuid]
 			proto_port = proto_desc[1]
 			if proto_port != 0xffff:
 				if proto_label == 'L2CAP':
@@ -702,5 +660,10 @@ def main(argv):
 	gtk.main()
 
 if __name__ == '__main__':
+
 	main(sys.argv)
+	try:
+		pass
+	except Exception(e):
+		bt_popup_error([str(e)])
 	

@@ -8,7 +8,7 @@ import gtk
 import gtk.glade
 import gobject
 import dbus
-import pdb
+import bluetool
 
 from bluetool_parser import BluezConfig
 
@@ -16,69 +16,6 @@ if getattr(dbus, 'version', (0,0,0)) >= (0,41,0):
     import dbus.glib
 
 HCID_CONF_PATH = './hcid.conf'
-
-#
-#	CONSTANTS (stolen from hci.h in Bluez 2.19)
-#
-HCI_SCAN_INQUIRY= 1
-HCI_SCAN_PAGE	= 2
-
-HCI_LM_ACCEPT	= 0x8000
-HCI_LM_MASTER	= 0x0001
-
-HCI_LP_RSWITCH	= 0x0001
-HCI_LP_HOLD	= 0x0002
-HCI_LP_SNIFF	= 0x0004
-HCI_LP_PARK	= 0x0008
-
-#
-#	Device class decoding tables (straight from the BT assigned numbers page)
-#
-device_service_classes = [
-	#"Limited Discoverable Mode", None, None, 
-	"Positioning", "Networking", "Rendering",
-	"Capturing", "Object Transfer", "Audio",
-	"Telephony", "Information"
-]
-
-device_major_minor_classes = [
-	("Unknown"	,
-	["Unknown"]
-	),
-
-	("Computer"	,
-	["Unknown", "Workstation", "Server", "Laptop", "Handheld", "Palm" "Wearable"]
-	),
-
-	("Phone"	,
-	["Unknown", "Cellular", "Cordless", "Smartphone", 
-	"Modem or voice gateway", "ISDN access", "Sim card reader"]
-	),
-
-	("Lan"		,
-	["Unknown", "1-17% available", "17-33% available", "33-50% available",
-	"50-67 available%", "67-83 available%", "83-99 available%", "Not available"]
-	),
-
-	("Audio/Video"	,
-	["Unknown", "Headset", "Hands-free", "Microphone", "Loudspeaker", "Headphones",
-	"Portable audio", "Car audio", "Set-top box", "HIFI audio", "VCR", "Videocamera",
-	"Camcorder", "Video monitor", "Video display and loudspeaker", "Video conferencing",
-	None, "Gaming" ]
-	),
-
-	("Peripherial"	,
-	["Unknown", "Keyboard", "Pointing Device", "Combo"]
-	),
-
-	("Imaging"	,
-	["Unknown","Display","Camera","Scanner","Printer"]
-	), #todo: this field is wrong
-
-	("Wearable"	,
-	["Wirst watch","Pager","Jacket","Helmet","Glasses"]
-	)
-]
 
 #
 #	a simple tristate button
@@ -360,17 +297,17 @@ class BluetoolCfgPanel:
 				up,rx_bts,rx_err,tx_bts,tx_err = hci.GetProperty('stats')
 	
 				name = ''
-				address = hci.GetProperty('address')[1]
+				address = hci.GetProperty('address')
 
 				if up != 0:
-					name = hci.GetProperty('name')[1]
+					name = hci.GetProperty('name')
 
 					stat_mdl['bt_status_lab'] = 'ON'
 					stat_mdl['bt_rxbytes_lab'] = repr(rx_bts)
 					stat_mdl['bt_txbytes_lab'] = repr(tx_bts)
 					stat_mdl['bt_address_lab'] = address
 
-					hci_ver, hci_rev, lmp_ver, lmp_rev, man = hci.GetProperty('version_info')[1:]
+					hci_ver, hci_rev, lmp_ver, lmp_rev, man = hci.GetProperty('version_info')
 					stat_mdl['bt_hciver_lab'] = str(hci_ver) + ' ( rev. ' + repr(hci_rev) + ' )'
 					stat_mdl['bt_lmpver_lab'] = str(lmp_ver) + ' ( sub. ' + repr(lmp_rev) + ' )'
 					stat_mdl['bt_manuf_lab'] = man
@@ -379,8 +316,9 @@ class BluetoolCfgPanel:
 					dev_mdl['bt_devname_txt'][3] = name
 					print dev_mdl['bt_devname_txt']
 
+					svc, ma, mi = hci.GetProperty('class')
 					dev_mdl['bt_devclass_tgb'][0] = ON
-					dev_mdl['bt_devclass_tgb'][3] = hex(hci.GetProperty('class')[1])
+					dev_mdl['bt_devclass_tgb'][3] = hex( svc<<16 | ma<<8 | mi )
 
 					if hci.GetProperty('auth_enable') == 0:
 						ae = OFF
@@ -394,39 +332,39 @@ class BluetoolCfgPanel:
 						ee = ON
 					dev_mdl['bt_encrypt_enable_cb'][0] = ee
 
-					scan = hci.GetProperty('scan_enable')[1]
-					if scan & HCI_SCAN_INQUIRY:
+					scan = hci.GetProperty('scan_enable')
+					if scan & bluetool.HCI_SCAN_INQUIRY:
 						dev_mdl['bt_iscan_enable_cb'][0] = ON
 					else:	dev_mdl['bt_iscan_enable_cb'][0] = OFF
 
-					if scan & HCI_SCAN_PAGE:
+					if scan & bluetool.HCI_SCAN_PAGE:
 						dev_mdl['bt_pscan_enable_cb'][0] = ON
 					else:	dev_mdl['bt_pscan_enable_cb'][0] = OFF
 
-					lm = hci.GetProperty('link_mode')[1]
-					if lm & HCI_LM_ACCEPT:
+					lm = hci.GetProperty('link_mode')
+					if lm & bluetool.HCI_LM_ACCEPT:
 						dev_mdl['bt_lm_accept_cb'][0] = ON
 					else:	dev_mdl['bt_lm_accept_cb'][0] = OFF
 
-					if lm & HCI_LM_MASTER:
+					if lm & bluetool.HCI_LM_MASTER:
 						dev_mdl['bt_lm_master_cb'][0] = ON
 					else:	dev_mdl['bt_lm_master_cb'][0] = OFF
 
-					lp = hci.GetProperty('link_policy')[1]
+					lp = hci.GetProperty('link_policy')
 
-					if lp & HCI_LP_RSWITCH:
+					if lp & bluetool.HCI_LP_RSWITCH:
 						dev_mdl['bt_lp_rswitch_cb'][0] = ON
 					else:	dev_mdl['bt_lp_rswitch_cb'][0] = OFF
 
-					if lp & HCI_LP_HOLD:
+					if lp & bluetool.HCI_LP_HOLD:
 						dev_mdl['bt_lp_hold_cb'][0] = ON
 					else:	dev_mdl['bt_lp_hold_cb'][0] = OFF
 
-					if lp & HCI_LP_SNIFF:
+					if lp & bluetool.HCI_LP_SNIFF:
 						dev_mdl['bt_lp_sniff_cb'][0] = ON
 					else:	dev_mdl['bt_lp_sniff_cb'][0] = OFF
 
-					if lp & HCI_LP_PARK:
+					if lp & bluetool.HCI_LP_PARK:
 						dev_mdl['bt_lp_park_cb'][0] = ON
 					else:	dev_mdl['bt_lp_park_cb'][0] = OFF
 				else:
@@ -740,7 +678,7 @@ class BluetoolCfgPanel:
 		self.devclass_service_col.pack_start(svc_cell,True)
 		self.devclass_service_col.add_attribute(svc_cell,'text',0)
 
-		for s in device_service_classes :
+		for s in bluetool.HCI_SERVICE_CLASSES :
 			if s: self.devclass_service_store.append([s])
 
 		#
@@ -756,14 +694,14 @@ class BluetoolCfgPanel:
 		self.devclass_major_col.pack_start(major_cell,True)
 		self.devclass_major_col.add_attribute(major_cell,'text',0)
 
-		for m in device_major_minor_classes:
+		for m in bluetool.HCI_DEVICE_CLASSES:
 			self.devclass_major_store.append([m[0]])
 
 		#
 		minor = dcw.get_widget('bt_devclass_minor_tv')
 
 		self.devclass_minor_stores = {}
-		for ma in device_major_minor_classes:
+		for ma in bluetool.HCI_DEVICE_CLASSES:
 			self.devclass_minor_stores[ma[0]] = gtk.ListStore(str)
 			for mi in ma[1]:
 				if mi: self.devclass_minor_stores[ma[0]].append([mi])
@@ -819,10 +757,8 @@ class BluetoolCfgPanel:
 		#	create dbus proxy
 		#
 		self.sys_bus = dbus.SystemBus()
-		self.dbus_manager = dbus.Interface(
-			self.sys_bus.get_object('org.bluetool','/org/bluetool/manager'),
-			'org.bluetool.manager'
-		)
+		self.dbus_manager = bluetool.get_manager(self.sys_bus)
+
 		self.dbus_manager.connect_to_signal('DeviceAdded',self.DeviceAdded)
 		self.dbus_manager.connect_to_signal('DeviceRemoved',self.DeviceRemoved)
 		self.dbus_manager.connect_to_signal('DeviceUp',self.DeviceUp)
@@ -1044,13 +980,13 @@ class BluetoolCfgPanel:
 			scan |= self.dev_store[(0,)][1]['bt_iscan_enable_cb'][0]
 		else:
 			if self['bt_iscan_enable_cb'].get_active():
-				scan |= HCI_SCAN_INQUIRY
+				scan |= bluetool.HCI_SCAN_INQUIRY
 		
 		if self['bt_pscan_enable_cb'].tristate == DEFAULT:
 			scan |= self.dev_store[(0,)][1]['bt_pscan_enable_cb'][0]
 		else:
 			if self['bt_pscan_enable_cb'].get_active():
-				scan |= HCI_SCAN_PAGE
+				scan |= bluetool.HCI_SCAN_PAGE
 
 		hci.SetProperty('scan_enable', dbus.Byte(scan))
 
@@ -1085,9 +1021,9 @@ class BluetoolCfgPanel:
 		hci = dev['hci']
 		lm = 0
 		if self['bt_lm_accept_cb'].get_active():
-			lm |= HCI_LM_ACCEPT
+			lm |= bluetool.HCI_LM_ACCEPT
 		if self['bt_lm_master_cb'].get_active():
-			lm |= HCI_LM_MASTER
+			lm |= bluetool.HCI_LM_MASTER
 
 		hci.SetProperty('link_mode', dbus.UInt32(lm))
 
@@ -1111,13 +1047,13 @@ class BluetoolCfgPanel:
 		hci = dev['hci']
 		lp = 0
 		if self['bt_lp_rswitch_cb'].get_active():
-			lp |= HCI_LP_RSWITCH
+			lp |= bluetool.HCI_LP_RSWITCH
 		if self['bt_lp_hold_cb'].get_active():
-			lp |= HCI_LP_HOLD
+			lp |= bluetool.HCI_LP_HOLD
 		if self['bt_lp_sniff_cb'].get_active():
-			lp |= HCI_LP_SNIFF
+			lp |= bluetool.HCI_LP_SNIFF
 		if self['bt_lp_park_cb'].get_active():
-			lp |= HCI_LP_PARK
+			lp |= bluetool.HCI_LP_PARK
 
 		hci.SetProperty('link_policy', dbus.UInt32(lp))
 

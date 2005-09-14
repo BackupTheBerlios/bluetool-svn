@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include <common/debug.h>
 #include <algorithm>
 #include <common/fdnotifier.h>

@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include <sys/time.h>
 #include <algorithm>
 #include <common/timeout.h>

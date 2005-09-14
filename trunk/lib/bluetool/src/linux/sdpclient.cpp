@@ -1,3 +1,4 @@
+#include <common/refptr_impl.h>
 #include <vector>
 
 #include <sys/poll.h>
