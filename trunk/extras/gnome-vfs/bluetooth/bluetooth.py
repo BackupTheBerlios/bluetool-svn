@@ -3,7 +3,6 @@ import re
 import time
 import gnomevfs
 import dbus
-import bluetool
 import os
 
 import traceback
@@ -234,9 +233,13 @@ class RemDevFileHandle:
 
 		svc, ma, mi = self.hci.GetProperty('class')
 
+		icon_path = 'file://'+bluetool.devclass2icon(ma)
+
+		print icon_path
+
 		self.contents = REMDEV_FILE_PROTOTYPE % (
 					self.name,
-					'file:///usr/share/pixmaps/bt-logo.png',
+					icon_path,
 					dir_handle.address,
 					self.address
 				)
