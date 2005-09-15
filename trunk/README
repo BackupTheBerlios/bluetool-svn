@@ -1,0 +1,47 @@
+
+THIS SOFTWARE IS STILL UNDER DEVELOPMENT, IF YOU'RE WILLING
+TO INSTALL AND USE THIS SOFTWARE ON PRODUCTION SYSTEMS, PLEASE
+WAIT UNTIL A STABLE VERSION IS RELEASED, IF YOU'RE WILLING
+TO CONTRIBUTE CODE AND FEEDBACK TO THE DEVELOPERS, PLEASE FOLLOW
+THE INSTRUCTIONS BELOW
+
+in order to compile the bluetooth daemon, the following packages
+are needed ( package names are referred to those available in
+Ubuntu Linux 5.10, names can vary depending on the GNU/Linux
+distribution you're using )
+
+libdbus-1-dev
+libbluetooth1-dev
+libsigc++-2.0-dev
+python2.4-dev
+
+in order to use the graphical tools included in the /extras
+subdirectory in the source tree, the following python packages
+are also needed
+
+python2.4-dbus
+python2.4-gtk2
+python2.4-gnome2
+python2.4-gnome2-extras
+
+once those packages are installed, you can configure the daemon
+and the libraries with
+
+./configure
+
+from the root directory.
+To compile the source, just do
+
+make
+
+from the same directory
+
+NOTE:	install targets are not in the build scripts yet,here's how
+	to run the daemon:
+
+1) copy ./bin/daemon/bluetool.conf into /etc/dbus-1/system.d/
+2) restart dbus
+3) run ./bin/daemon/bluetool-daemon as root
+
+NOTE:	the daemon does not 'daemonize' actually, this makes debug
+	output available on the console
