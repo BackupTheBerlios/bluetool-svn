@@ -1,9 +1,13 @@
 import sys
+import os
 import re
 import time
 import gnomevfs
+import gobject
 import dbus
-import os
+
+try: import dbus.glib
+except:	pass
 
 import traceback
 import pdb
@@ -23,7 +27,7 @@ DEVICE_FILE_PROTOTYPE = \
 Version=1.0
 Encoding=UTF-8
 Type=Link
-Name=Bluetooth neighborood on %s
+Name=Bluetooth on %s
 Icon=%s
 URL=bluetooth:///%s/
 '''
@@ -41,8 +45,6 @@ URL=bluetooth:///%s/%s/
 
 HWADDR_RE = re.compile('^([0-9a-fA-F][0-9a-fA-F]:){5}([0-9a-fA-F][0-9a-fA-F])$')
 
-DIR_LAST_OPEN = None
-
 def get_root():
 	return RootDirectoryHandle()
 
@@ -51,6 +53,8 @@ class RootDirectoryHandle(object):
 	def __init__(self):
 
 		print 'RootDirectoryHandle()'
+
+		self.uri = gnomevfs.URI('bluetooth:///')
 
 		self.mgr = bluetool.get_manager(sys_bus)
 
@@ -162,18 +166,15 @@ class DeviceDirectoryHandle(object):
 	def __init__(self, uri, dev_path):
 		print 'DeviceDirectoryHandle(',dev_path,')'
 
+		self.uri = uri
+		self.dev_path = dev_path
+
 		self.hci = bluetool.get_local_hci(sys_bus, dev_path)
 		
 		self.name = self.hci.GetProperty('name')
 		self.address = self.hci.GetProperty('address')
-
-		print 'dir_last_open=',DIR_LAST_OPEN
-
-		if uri == DIR_LAST_OPEN:
-			print 'reloading URI', uri 
-			self.devs = self.hci.StartInquiry()
-		else:
-			self.devs = self.hci.InquiryCache()
+		
+		self.devs = self.hci.InquiryCache()
 		self.index = 0
 
 	def get_file_info(self, file_info):
@@ -189,6 +190,15 @@ class DeviceDirectoryHandle(object):
 	def read_dir(self, file_info):
 
 		try:
+
+			if self.index == 0 and os.getenv(r'BLUETOOTH_DIR_LAST_OPEN') == self.uri.path:
+				print 'reloading URI', self.uri
+				#
+				#	XXX: calling an external program sucks
+				#
+				os.system('./bluetool_rescan.py '+self.dev_path)
+				self.devs = self.hci.InquiryCache()
+
 			rem_path = self.devs[self.index]
 			RemDevFileHandle(rem_path, self).get_file_info(file_info)
 
@@ -317,17 +327,17 @@ class bluetooth_method:
 
 		handle = uri2handle(uri)
 
-		DIR_LAST_OPEN = uri
-
 		return handle
 
 	def vfs_read_directory(self, handle, file_info, context):
 		print "vfs_read_directory", handle, context
+		print 'dir_last_open=', os.getenv(r'BLUETOOTH_DIR_LAST_OPEN')
 		handle.read_dir(file_info)
 
 	def vfs_close_directory(self, handle, context):
 		print "vfs_close_directory", handle, context
 		#raise gnomevfs.NotSupportedError
+		os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = handle.uri.path
 		del (handle)
 
 	def vfs_get_file_info(self, uri, file_info, options, context):
@@ -350,7 +360,6 @@ class bluetooth_method:
 		print "vfs_open", uri
 
 		try:
-
 			return uri2handle(uri)
 
 		except Exception, e:
