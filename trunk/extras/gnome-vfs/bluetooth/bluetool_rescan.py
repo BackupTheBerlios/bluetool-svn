@@ -30,7 +30,7 @@ class scanner:
         	vbox.show()
 
 		self.progress = gtk.ProgressBar()
-		self.progress.set_text('Searching devices, please wait...')
+		self.progress.set_text('Searching devices, please wait')
         	vbox.pack_start(self.progress, False, False, 0)
 	        self.progress.show()
   

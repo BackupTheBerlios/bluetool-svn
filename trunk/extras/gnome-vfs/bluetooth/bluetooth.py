@@ -43,106 +43,32 @@ Icon=%s
 URL=bluetooth:///%s/%s/
 '''
 
+REMSVC_FILE_PROTOTYPE = \
+'''
+[Desktop Entry]
+Version=1.0
+Encoding=UTF-8
+Type=Link
+Name=%s
+Icon=%s
+'''
+
 HWADDR_RE = re.compile('^([0-9a-fA-F][0-9a-fA-F]:){5}([0-9a-fA-F][0-9a-fA-F])$')
 
-def get_root():
-	return RootDirectoryHandle()
-
-class RootDirectoryHandle(object):
+class VfsDesktopFileBase:
 
 	def __init__(self):
 
-		print 'RootDirectoryHandle()'
-
-		self.uri = gnomevfs.URI('bluetooth:///')
-
-		self.mgr = bluetool.get_manager(sys_bus)
-
-		self.devs = self.mgr.ListDevices()
-		self.index = 0
-
-	def read_dir(self, file_info):
-
-		try:
-			dev_path = self.devs[self.index]
-			DeviceFileHandle(dev_path).get_file_info(file_info)
-
-			self.index += 1
-
-		except IndexError:
-			self.index = 0
-			raise gnomevfs.EOFError
-
-	def get_file_info(self, file_info):
-
-		file_info.name = '/'
-		file_info.mime_type = 'x-directory/normal'
-		file_info.type = gnomevfs.FILE_TYPE_DIRECTORY
-		file_info.permissions = 0555
-		file_info.mtime = long(time.time())
-		file_info.ctime = file_info.mtime
-		file_info.atime = file_info.mtime
-
-	def open_device_file(self, uri):
-
-		if not uri.short_name.endswith('.desktop'):
-			return
-
-		address = uri.short_name[:-8]
-
-		#print 'open_device_file: address =',address, 'self =', self
-
-		print 'devs=',self.devs
-
-		for dev_path in self.devs:
-			hci = bluetool.get_local_hci(sys_bus, dev_path)
-			if hci.GetProperty('address').replace(':','') == address:
-				return DeviceFileHandle(dev_path)
-
-		raise gnomevfs.NotFoundError
-
-	def open_device_dir(self, uri):
-
-		# uri was already validated
-
-		for dev_path in self.devs:
-			hci = bluetool.get_local_hci(sys_bus, dev_path)
-			if hci.GetProperty('address') == uri.short_name:
-				return DeviceDirectoryHandle(uri, dev_path)
-
-		raise gnomevfs.NotFoundError
-
-class DeviceFileHandle(object):
-
-	def __init__(self, dev_path):
-
-		print 'DeviceFileHandle(',dev_path,')'
-
-		self.hci = bluetool.get_local_hci(sys_bus, dev_path)
-		
-		self.name = self.hci.GetProperty('name')
-		self.address = self.hci.GetProperty('address')
-		if len(self.name) == 0:
-			self.name = self.address
-
-		self.contents = DEVICE_FILE_PROTOTYPE % (
-					self.name,
-					'file:///usr/share/pixmaps/bt-logo.png',
-					self.address
-				)
+		self.contents = ''
 		self.bread = 0
 
 	def get_file_info(self, file_info):
 
-		dskname = self.address.replace(':','')
-
-		file_info.name = dskname + '.desktop'
+		file_info.name = self.basename + '.desktop'
 		file_info.mime_type = 'application/x-gnome-app-info'
 		file_info.type = gnomevfs.FILE_TYPE_REGULAR
 		file_info.permissions = 0555
 		file_info.size = len(self.contents)
-		#file_info.uid = os.getuid()
-		#file_info.gid = os.getgid()
 		file_info.mtime = long(time.time())
 		file_info.ctime = file_info.mtime
 		file_info.atime = file_info.mtime
@@ -161,25 +87,14 @@ class DeviceFileHandle(object):
 
 		return l
 
-class DeviceDirectoryHandle(object):
-
-	def __init__(self, uri, dev_path):
-		print 'DeviceDirectoryHandle(',dev_path,')'
-
-		self.uri = uri
-		self.dev_path = dev_path
-
-		self.hci = bluetool.get_local_hci(sys_bus, dev_path)
-		
-		self.name = self.hci.GetProperty('name')
-		self.address = self.hci.GetProperty('address')
-		
-		self.devs = self.hci.InquiryCache()
+class VfsDirectoryBase:
+	
+	def __init__(self):
 		self.index = 0
 
 	def get_file_info(self, file_info):
 
-		file_info.name = self.address
+		file_info.name = self.basename
 		file_info.mime_type = 'x-directory/normal'
 		file_info.type = gnomevfs.FILE_TYPE_DIRECTORY
 		file_info.permissions = 0555
@@ -187,16 +102,120 @@ class DeviceDirectoryHandle(object):
 		file_info.ctime = file_info.mtime
 		file_info.atime = file_info.mtime
 
+def get_root():
+	return RootDirectoryHandle()
+
+class RootDirectoryHandle(VfsDirectoryBase):
+
+	def __init__(self):
+		VfsDirectoryBase.__init__(self)
+
+		print 'RootDirectoryHandle()'
+
+		self.uri = gnomevfs.URI('bluetooth:///')
+
+		self.basename = self.uri.path
+
+		self.mgr = bluetool.get_manager(sys_bus)
+
+		self.devs = self.mgr.ListDevices()
+
+	def read_dir(self, file_info):
+
+		try:
+			dev_path = self.devs[self.index]
+			DeviceFileHandle(dev_path).get_file_info(file_info)
+
+			self.index += 1
+
+		except IndexError:
+			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
+			raise gnomevfs.EOFError
+
+	def open_device_file(self, uri):
+
+		address = uri.short_name[:-8]
+
+		#print 'open_device_file: address =',address, 'self =', self
+
+		print 'devs=',self.devs
+
+		for dev_path in self.devs:
+			hci = bluetool.get_local_hci(sys_bus, dev_path)
+			if hci.GetProperty('address').replace(':','') == address:
+				return DeviceFileHandle(dev_path)
+
+		raise gnomevfs.NotFoundError
+
+	def open_device_dir(self, uri):
+
+		for dev_path in self.devs:
+			hci = bluetool.get_local_hci(sys_bus, dev_path)
+			if hci.GetProperty('address') == uri.short_name:
+				return DeviceDirectoryHandle(uri, dev_path)
+
+		raise gnomevfs.NotFoundError
+
+class DeviceFileHandle(VfsDesktopFileBase):
+
+	def __init__(self, dev_path):
+		VfsDesktopFileBase.__init__(self)
+
+		print 'DeviceFileHandle(',dev_path,')'
+
+		self.hci = bluetool.get_local_hci(sys_bus, dev_path)
+		
+		self.name = self.hci.GetProperty('name')
+		self.address = self.hci.GetProperty('address')
+		if len(self.name) == 0:
+			self.name = self.address
+
+		self.contents = DEVICE_FILE_PROTOTYPE % (
+					self.name,
+					'file:///usr/share/pixmaps/bt-logo.png',
+					self.address
+				)
+		self.basename = self.address.replace(':','')
+		self.bread = 0
+
+class DeviceDirectoryHandle(VfsDirectoryBase):
+
+	def __init__(self, uri, dev_path):
+		VfsDirectoryBase.__init__(self)
+
+		print 'DeviceDirectoryHandle(',dev_path,')'
+
+		self.uri = uri
+		self.dev_path = dev_path
+
+		self.basename = uri.short_name
+
+		self.hci = bluetool.get_local_hci(sys_bus, dev_path)
+		
+		#self.name = self.hci.GetProperty('name')
+		self.address = self.hci.GetProperty('address')
+		
+		self.devs = self.hci.InquiryCache()
+
 	def read_dir(self, file_info):
 
 		try:
 
 			if self.index == 0 and os.getenv(r'BLUETOOTH_DIR_LAST_OPEN') == self.uri.path:
 				print 'reloading URI', self.uri
+
+				#	this should not be needed, but fixes a strange
+				#	behaviour in nautilus, which would cause the
+				#	external program (see below) to be run more than once
+				#
+				os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = ''
+
 				#
 				#	XXX: calling an external program sucks
 				#
 				os.system('./bluetool_rescan.py '+self.dev_path)
+				print 'done reloading'
+				
 				self.devs = self.hci.InquiryCache()
 
 			rem_path = self.devs[self.index]
@@ -205,15 +224,12 @@ class DeviceDirectoryHandle(object):
 			self.index += 1
 
 		except IndexError:
-			self.index = 0
+			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
 			raise gnomevfs.EOFError
 
 	def open_remdev_file(self, uri):
 
 		print 'open_remdev_file(', uri, ')'
-
-		if not uri.short_name.endswith('.desktop'):
-			return
 
 		address = uri.short_name[:-8]
 
@@ -225,16 +241,23 @@ class DeviceDirectoryHandle(object):
 		raise gnomevfs.NotFoundError
 
 	def open_remdev_dir(self, uri):
-		pass
 
-class RemDevFileHandle:
+		for rem_path in self.devs:
+			hci = bluetool.get_remote_hci(sys_bus, rem_path)
+			if hci.GetProperty('address') == uri.short_name:
+				return RemDevDirectoryHandle(uri, rem_path)
+
+		raise gnomevfs.NotFoundError
+
+class RemDevFileHandle(VfsDesktopFileBase):
 
 	def __init__(self, rem_path, dir_handle):
+		VfsDesktopFileBase.__init__(self)
 
 		print 'RemDevFileHandle(',rem_path,')'
 
 		self.hci = bluetool.get_remote_hci(sys_bus, rem_path)
-		self.sdp = bluetool.get_remote_sdp(sys_bus, rem_path)
+		#self.sdp = bluetool.get_remote_sdp(sys_bus, rem_path)
 		
 		self.name = self.hci.GetProperty('name')
 		self.address = self.hci.GetProperty('address')
@@ -253,44 +276,68 @@ class RemDevFileHandle:
 					dir_handle.address,
 					self.address
 				)
+		self.basename = self.address.replace(':','')
 		self.bread = 0
 
-	def get_file_info(self, file_info):
+class RemDevDirectoryHandle(VfsDirectoryBase):
 
-		dskname = self.address.replace(':','')
+	def __init__(self, uri, rem_path):
+		VfsDirectoryBase.__init__(self)
 
-		file_info.name = dskname + '.desktop'
-		file_info.mime_type = 'application/x-gnome-app-info'
-		file_info.type = gnomevfs.FILE_TYPE_REGULAR
-		file_info.permissions = 0555
-		file_info.size = len(self.contents)
-		#file_info.uid = os.getuid()
-		#file_info.gid = os.getgid()
-		file_info.mtime = long(time.time())
-		file_info.ctime = file_info.mtime
-		file_info.atime = file_info.mtime
+		print 'RemDevDirectoryHandle(',rem_path,')'
 
-	def read(self, buff, num_bytes, context):
+		self.uri = uri
+		self.dev_path = rem_path
 
-		l = len(self.contents)
+		self.basename = uri.short_name
 
-		if self.bread >= l:
+		self.hci = bluetool.get_remote_hci(sys_bus, rem_path)
+		self.sdp = bluetool.get_remote_sdp(sys_bus, rem_path)
+
+		self.records = self.sdp.SearchAllRecordsCached()[1]
+
+	def read_dir(self, file_info):
+
+		try:
+			rec_path = self.records[self.index]
+
+			RemSvcFileHandle(rec_path, self).get_file_info(file_info)
+
+			self.index += 1
+
+		except IndexError:
+			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
 			raise gnomevfs.EOFError
-			#return 0
 
-		buff[:l] = self.contents
+	def open_remsvc_file(self, uri):
 
-		self.bread += l
+		handle = uri.short_name[:-8]
 
-		return l
+		for rec_path in self.records:
+			rec = bluetool.get_record(sys_bus, rec_path)
+			if str(rec.GetHandle()) == handle:
+				return RemSvcFileHandle(rec_path, self)
 
-class InquiryDirectoryHandle:
-	def __init__(self, uri):
-		pass
+		raise gnomevfs.NotFoundError
 
-class ServiceDirectoryHandle:
-	def __init__(self, uri):
-		pass
+class RemSvcFileHandle(VfsDesktopFileBase):
+
+	def __init__(self, rec_path, dir_handle):
+		VfsDesktopFileBase.__init__(self)
+
+		print 'RemSvcFileHandle(',rec_path,')'
+
+		self.record = bluetool.get_record(sys_bus, rec_path)
+
+		self.basename = str(self.record.GetHandle())
+
+		ids = self.record.GetClassIdList()
+		name = bluetool.SDP_SVCLASS_IDS[ids[0]]
+
+		self.contents = REMSVC_FILE_PROTOTYPE % (
+					name,
+					'file:///usr/share/pixmaps/bt-logo.png'
+				)
 
 def uri2handle(uri):
 
@@ -301,20 +348,54 @@ def uri2handle(uri):
 
 	parent = uri.parent
 
-	if uri.short_name.endswith('.desktop'):
+	pes = uri.path.split('/')
 
-		if HWADDR_RE.match(parent.path[1:]):
-			return get_root().open_device_dir(parent).open_remdev_file(uri)
-		else:
-			return get_root().open_device_file(uri)
+	if len(pes) == 0:
+		return None
 
-	else:
-		if HWADDR_RE.match(parent.path[1:]):
-			return get_root().open_device_dir(parent).open_remdev_dir(uri)
-		else:
-			return get_root().open_device_dir(uri)
+	handle = None
 
-	raise gnomevfs.NotFoundError
+	uri = gnomevfs.URI('bluetooth://')
+
+	for i, pe in enumerate( pes ):
+
+		uri = uri.append_string(pe)
+
+		if i == 0:
+			handle = get_root()
+
+		if i == 1:
+			if HWADDR_RE.match(pe):
+
+				handle = handle.open_device_dir(uri)
+
+			elif pe.endswith('.desktop'):
+
+				handle = handle.open_device_file(uri)
+				break
+			else:	
+				raise gnomevfs.NotFoundError
+
+		if i == 2:
+			if HWADDR_RE.match(pe):
+
+				handle = handle.open_remdev_dir(uri)
+
+			elif pe.endswith('.desktop'):
+
+				handle = handle.open_remdev_file(uri)
+				break
+			else:	
+				raise gnomevfs.NotFoundError
+
+		if i == 3:
+			if pe.endswith('.desktop'):
+
+				handle = handle.open_remsvc_file(uri)
+				break
+			else:	
+				raise gnomevfs.NotFoundError
+	return handle
 
 class bluetooth_method:
 
@@ -337,7 +418,6 @@ class bluetooth_method:
 	def vfs_close_directory(self, handle, context):
 		print "vfs_close_directory", handle, context
 		#raise gnomevfs.NotSupportedError
-		os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = handle.uri.path
 		del (handle)
 
 	def vfs_get_file_info(self, uri, file_info, options, context):
