@@ -55,6 +55,20 @@ Icon=%s
 
 HWADDR_RE = re.compile('^([0-9a-fA-F][0-9a-fA-F]:){5}([0-9a-fA-F][0-9a-fA-F])$')
 
+class VfsCache:
+
+	cache = {}
+
+	@staticmethod
+	def load(uri):
+		if VfsCache.cache.has_key(uri):
+			return VfsCache.cache[uri]
+		else:	return None
+
+	@staticmethod
+	def store(uri,handle):
+		VfsCache.cache[uri] = handle
+
 class VfsDesktopFileBase:
 
 	def __init__(self):
@@ -78,6 +92,7 @@ class VfsDesktopFileBase:
 		l = len(self.contents)
 
 		if self.bread >= l:
+			self.bread = 0
 			raise gnomevfs.EOFError
 			#return 0
 
@@ -91,6 +106,7 @@ class VfsDirectoryBase:
 	
 	def __init__(self):
 		self.index = 0
+		self.handles = {}
 
 	def get_file_info(self, file_info):
 
@@ -101,6 +117,14 @@ class VfsDirectoryBase:
 		file_info.mtime = long(time.time())
 		file_info.ctime = file_info.mtime
 		file_info.atime = file_info.mtime
+
+	def store_handle(self, handle):
+
+		self.handles[handle.basename] = handle
+
+	def get_handles(self):
+
+		return self.handles.values()
 
 def get_root():
 	return RootDirectoryHandle()
@@ -113,6 +137,8 @@ class RootDirectoryHandle(VfsDirectoryBase):
 		print 'RootDirectoryHandle()'
 
 		self.uri = gnomevfs.URI('bluetooth:///')
+
+		VfsCache.store(self.uri,self)
 
 		self.basename = self.uri.path
 
@@ -129,6 +155,7 @@ class RootDirectoryHandle(VfsDirectoryBase):
 			self.index += 1
 
 		except IndexError:
+			self.index = 0
 			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
 			raise gnomevfs.EOFError
 
@@ -176,7 +203,6 @@ class DeviceFileHandle(VfsDesktopFileBase):
 					self.address
 				)
 		self.basename = self.address.replace(':','')
-		self.bread = 0
 
 class DeviceDirectoryHandle(VfsDirectoryBase):
 
@@ -186,6 +212,9 @@ class DeviceDirectoryHandle(VfsDirectoryBase):
 		print 'DeviceDirectoryHandle(',dev_path,')'
 
 		self.uri = uri
+
+		VfsCache.store(self.uri,self)
+
 		self.dev_path = dev_path
 
 		self.basename = uri.short_name
@@ -196,6 +225,9 @@ class DeviceDirectoryHandle(VfsDirectoryBase):
 		self.address = self.hci.GetProperty('address')
 		
 		self.devs = self.hci.InquiryCache()
+
+		for dev in self.devs:
+			self.store_handle(RemDevFileHandle(dev, self))
 
 	def read_dir(self, file_info):
 
@@ -218,12 +250,12 @@ class DeviceDirectoryHandle(VfsDirectoryBase):
 				
 				self.devs = self.hci.InquiryCache()
 
-			rem_path = self.devs[self.index]
-			RemDevFileHandle(rem_path, self).get_file_info(file_info)
+			self.get_handles()[self.index].get_file_info(file_info)
 
 			self.index += 1
 
 		except IndexError:
+			self.index = 0
 			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
 			raise gnomevfs.EOFError
 
@@ -268,8 +300,6 @@ class RemDevFileHandle(VfsDesktopFileBase):
 
 		icon_path = 'file://'+bluetool.devclass2icon(ma)
 
-		print icon_path
-
 		self.contents = REMDEV_FILE_PROTOTYPE % (
 					self.name,
 					icon_path,
@@ -277,7 +307,6 @@ class RemDevFileHandle(VfsDesktopFileBase):
 					self.address
 				)
 		self.basename = self.address.replace(':','')
-		self.bread = 0
 
 class RemDevDirectoryHandle(VfsDirectoryBase):
 
@@ -287,6 +316,9 @@ class RemDevDirectoryHandle(VfsDirectoryBase):
 		print 'RemDevDirectoryHandle(',rem_path,')'
 
 		self.uri = uri
+
+		VfsCache.store(self.uri,self)
+
 		self.dev_path = rem_path
 
 		self.basename = uri.short_name
@@ -296,16 +328,18 @@ class RemDevDirectoryHandle(VfsDirectoryBase):
 
 		self.records = self.sdp.SearchAllRecordsCached()[1]
 
+		for rec in self.records:
+			self.store_handle(RemSvcFileHandle(rec, self))
+
 	def read_dir(self, file_info):
 
 		try:
-			rec_path = self.records[self.index]
-
-			RemSvcFileHandle(rec_path, self).get_file_info(file_info)
+			self.get_handles()[self.index].get_file_info(file_info)
 
 			self.index += 1
 
 		except IndexError:
+			self.index = 0
 			os.environ[r'BLUETOOTH_DIR_LAST_OPEN'] = self.uri.path
 			raise gnomevfs.EOFError
 
@@ -334,9 +368,11 @@ class RemSvcFileHandle(VfsDesktopFileBase):
 		ids = self.record.GetClassIdList()
 		name = bluetool.SDP_SVCLASS_IDS[ids[0]]
 
+		icon_path = 'file://'+bluetool.svclass2icon(ids[0])
+
 		self.contents = REMSVC_FILE_PROTOTYPE % (
 					name,
-					'file:///usr/share/pixmaps/bt-logo.png'
+					icon_path
 				)
 
 def uri2handle(uri):
@@ -360,6 +396,11 @@ def uri2handle(uri):
 	for i, pe in enumerate( pes ):
 
 		uri = uri.append_string(pe)
+
+		tmp = VfsCache.load(uri)
+		if tmp is not None:
+			handle = tmp
+			continue
 
 		if i == 0:
 			handle = get_root()
@@ -395,6 +436,13 @@ def uri2handle(uri):
 				break
 			else:	
 				raise gnomevfs.NotFoundError
+
+		if tmp is None:
+			VfsCache.store(uri, handle)
+
+	if handle is not None:
+		VfsCache.store(uri, handle)
+
 	return handle
 
 class bluetooth_method:
@@ -418,7 +466,6 @@ class bluetooth_method:
 	def vfs_close_directory(self, handle, context):
 		print "vfs_close_directory", handle, context
 		#raise gnomevfs.NotSupportedError
-		del (handle)
 
 	def vfs_get_file_info(self, uri, file_info, options, context):
 		print "vfs_get_file_info", uri, options, context
@@ -447,7 +494,6 @@ class bluetooth_method:
 
 	def vfs_close(self, handle, context):
 		print "vfs_close", handle
-		del (handle)
 
 	def vfs_read(self, handle, buffer, num_bytes, context):
 		print "vfs_read", handle
